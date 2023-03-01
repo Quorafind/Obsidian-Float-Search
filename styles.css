@@ -21,3 +21,7 @@ If your plugin does not need CSS, delete this file.
 .fs-block {
 	height: 100% !important;
 }
+
+.modal-container.float-search-modal-container.mod-dim {
+	z-index: 30;
+}
