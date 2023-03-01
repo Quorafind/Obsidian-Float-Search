@@ -6,3 +6,18 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+.float-search-modal {
+	height: 800px;
+}
+
+.fs-content .workspace-split.mod-vertical {
+	height: 100%;
+}
+
+.fs-content {
+	height: 100%;
+}
+
+.fs-block {
+	height: 100% !important;
+}
