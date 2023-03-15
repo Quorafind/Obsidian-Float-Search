@@ -1,6 +1,8 @@
 # Obsidian Float Search
 
-Float search modal.
+You can use search view in modal now.
+
+- Set hotkey for open float search quickly.
 
 ## Support
 

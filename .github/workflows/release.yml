@@ -5,7 +5,7 @@ on:
         types: [ created ]
 
 env:
-    PLUGIN_NAME: obsidian-canvas-presentation
+    PLUGIN_NAME: obsidian-float-search
 
 jobs:
     build:
