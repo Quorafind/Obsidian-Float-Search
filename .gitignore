@@ -20,3 +20,8 @@ data.json
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
+
+# Zip/Rar/7z files
+*.zip
+*.rar
+*.7z
