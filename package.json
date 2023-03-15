@@ -1,7 +1,7 @@
 {
 	"name": "float-search",
-	"version": "0.0.1",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"version": "1.0.0",
+	"description": "You can use search view in modal now.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

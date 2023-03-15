@@ -22,6 +22,10 @@ If your plugin does not need CSS, delete this file.
 	height: 100% !important;
 }
 
+.fs-block .workspace-leaf-resize-handle {
+	display: none;
+}
+
 .modal-container.float-search-modal-container.mod-dim {
 	z-index: 30;
 }
