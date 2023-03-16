@@ -154,6 +154,7 @@ declare module "obsidian" {
 		onKeyShowMoreBefore(e: KeyboardEvent): void;
 		onKeyShowMoreAfter(e: KeyboardEvent): void;
 		dom: any;
+        searchComponent: SearchComponent;
 	}
 
     interface EmptyView extends View {

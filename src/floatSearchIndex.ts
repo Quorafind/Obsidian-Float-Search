@@ -7,7 +7,7 @@ import {
 	WorkspaceContainer, WorkspaceItem,
 	WorkspaceLeaf
 } from 'obsidian';
-import { EmbeddedView, isDailyNoteLeaf, spawnLeafView } from "./leafView";
+import { EmbeddedView, isEmebeddedLeaf, spawnLeafView } from "./leafView";
 import { around } from "monkey-around";
 
 export default class FloatSearchPlugin extends Plugin {
@@ -106,12 +106,12 @@ export default class FloatSearchPlugin extends Plugin {
 				setPinned(old) {
 					return function (pinned: boolean) {
 						old.call(this, pinned);
-						if(isDailyNoteLeaf(this) && !pinned) this.setPinned(true);
+						if(isEmebeddedLeaf(this) && !pinned) this.setPinned(true);
 					}
 				},
 				openFile(old) {
 					return function (file: TFile, openState?: OpenViewState) {
-						if (isDailyNoteLeaf(this)) {
+						if (isEmebeddedLeaf(this)) {
 							setTimeout(
 								around(Workspace.prototype, {
 									recordMostRecentOpenedFile(old) {
@@ -150,8 +150,13 @@ export default class FloatSearchPlugin extends Plugin {
 
 class FloatSearchModal extends Modal {
 	private readonly plugin: FloatSearchPlugin;
-	private embeddedView: EmbeddedView;
-	private leaf: WorkspaceLeaf;
+	private searchEmbeddedView: EmbeddedView;
+	private fileEmbeddedView: EmbeddedView;
+	private searchLeaf: WorkspaceLeaf;
+	private fileLeaf: WorkspaceLeaf | undefined;
+
+	private searchCtnEl: HTMLElement;
+	private fileEl: HTMLElement;
 
 	constructor(app: App, plugin: FloatSearchPlugin) {
 		super(app);
@@ -159,34 +164,38 @@ class FloatSearchModal extends Modal {
 	}
 
 	async onOpen() {
-		const { contentEl } = this;
+		const { contentEl, containerEl, modalEl } = this;
 
-		this.initCss(contentEl);
-		await this.initView(contentEl);
+		this.searchCtnEl = contentEl.createDiv({ cls: "float-search-modal-search-ctn" });
+
+		this.initCss(contentEl, modalEl, containerEl);
+		await this.initSearchView(this.searchCtnEl);
 		this.initInput();
 		this.initContent();
 	}
 
 	onClose() {
 		const { contentEl } = this;
-		this.leaf.detach();
-		this.embeddedView.unload();
+		this.searchLeaf.detach();
+		this.fileLeaf?.detach();
+		this.searchEmbeddedView.unload();
+		this.fileEmbeddedView?.unload();
 		contentEl.empty();
 	}
 
-	initCss(contentEl: HTMLElement) {
-		contentEl.classList.add("float-search-modal");
-		contentEl.parentElement?.classList.add("float-search-modal-parent");
-		contentEl.parentElement?.parentElement?.classList.add("float-search-modal-container");
+	initCss(contentEl: HTMLElement, modalEl: HTMLElement, containerEl: HTMLElement) {
+		contentEl.classList.add("float-search-modal-content");
+		modalEl.classList.add("float-search-modal");
+		containerEl.classList.add("float-search-modal-container");
 	}
 
-	async initView(contentEl: HTMLElement) {
+	async initSearchView(contentEl: HTMLElement) {
 		const [createdLeaf, embeddedView] = spawnLeafView(this.plugin, contentEl);
-		this.leaf = createdLeaf;
-		this.embeddedView = embeddedView;
+		this.searchLeaf = createdLeaf;
+		this.searchEmbeddedView = embeddedView;
 
-		this.leaf.setPinned(true);
-		await this.leaf.setViewState({
+		this.searchLeaf.setPinned(true);
+		await this.searchLeaf.setViewState({
 			type: "search",
 		});
 	}
@@ -195,7 +204,7 @@ class FloatSearchModal extends Modal {
 		const inputEl = this.contentEl.getElementsByTagName("input")[0];
 		inputEl.focus();
 		inputEl.onkeydown = (e) => {
-			const currentView = this.leaf.view as SearchView;
+			const currentView = this.searchLeaf.view as SearchView;
 			switch (e.key) {
 				case "ArrowDown":
 					if (e.shiftKey) {
@@ -225,6 +234,29 @@ class FloatSearchModal extends Modal {
 						this.close();
 					}
 					break;
+				case "Tab":
+					if(e.shiftKey) {
+						if(this.fileLeaf) {
+							this.fileLeaf?.detach();
+							this.fileLeaf = undefined;
+							this.fileEmbeddedView?.unload();
+							this.modalEl.toggleClass("float-search-width", false);
+							this.fileEl.detach();
+
+							break;
+						}
+					}
+
+					if(currentView.dom.focusedItem) {
+						const item = currentView.dom.focusedItem;
+						const file = item.parent.file instanceof TFile ? item.parent.file : item.file;
+
+						item.parent.file instanceof TFile ? this.initFileView(file, {match: {
+                            content: item.content,
+                            matches: item.matches
+                        }}) : this.initFileView(file, undefined);
+					}
+					break;
 			}
 		}
 	}
@@ -237,17 +269,83 @@ class FloatSearchModal extends Modal {
 				return;
 			}
 
+			if(this.fileLeaf) {
+				let targetElement = e.target as HTMLElement | null;
+
+				if((this.searchCtnEl as Node).contains(targetElement as Node)) {
+					while (targetElement) {
+						if (targetElement.classList.contains('tree-item')) {
+							console.log(targetElement);
+							break;
+						}
+						targetElement = targetElement.parentElement;
+						}
+					const fileInnerEl = targetElement?.getElementsByClassName("tree-item-inner")[0] as HTMLElement;
+					const innerText = fileInnerEl.innerText;
+					const file = app.metadataCache.getFirstLinkpathDest(innerText, "");
+					
+					const currentView = this.searchLeaf.view as SearchView;
+					if(file) {
+						const item = currentView.dom.resultDomLookup.get(file);
+						console.log(item);
+						currentView.dom.setFocusedItem(item);
+						this.initFileView(file, undefined);
+						(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+					}
+				}
+
+				
+				return;
+			}
+
+			console.log(e.target);
+
 			const target = e.target as HTMLElement;
 			const classList = target.classList;
 
 			const navElement = contentEl.getElementsByClassName('nav-header')[0];
-			if (e.target !== navElement && navElement.contains(e.target as Node)) {
+			if (e.target !== navElement && (navElement as Node).contains(e.target as Node)) {
 				return;
 			}
 
-			if(!(classList.contains("tree-item-icon") || classList.contains("float-search-modal") || classList.contains("right-triangle") || target.parentElement?.classList.contains("right-triangle") || classList.contains("search-input-container") || target?.parentElement?.classList.contains("search-input-container") || classList.contains("search-result-hover-button"))) {
+			const fileElement = contentEl.getElementsByClassName('float-search-modal-file-ctn')[0];
+			if ((fileElement as Node)?.contains(e.target as Node)) {
+				return;
+			}
+
+			if(!(classList.contains("tree-item-icon") || classList.contains("float-search-modal-content") || classList.contains("right-triangle") || target.parentElement?.classList.contains("right-triangle") || classList.contains("search-input-container") || target?.parentElement?.classList.contains("search-input-container") || classList.contains("search-result-hover-button"))) {
 				this.close();
 			}
 		}
+	}
+
+	async initFileView(file: TFile, state: any) {
+		if(this.fileLeaf) {
+			await this.fileLeaf.openFile(file, {
+				active: false,
+				eState: state
+			});
+			setTimeout(() => {
+				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+			}, 0);
+			
+			return;
+		}
+
+		const { contentEl } = this;
+		this.fileEl = contentEl.createDiv({ cls: "float-search-modal-file-ctn" });
+		this.modalEl.toggleClass("float-search-width", true);
+
+		const [createdLeaf, embeddedView] = spawnLeafView(this.plugin, this.fileEl);
+		this.fileLeaf = createdLeaf;
+		this.fileEmbeddedView = embeddedView;
+
+		this.fileLeaf.setPinned(true);
+		await this.fileLeaf.openFile(file, {
+			active: false,
+			eState: state
+		});
+
+		(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
 	}
 }

@@ -7,7 +7,27 @@ If your plugin does not need CSS, delete this file.
 
 */
 .float-search-modal {
+	width: 600px;
+}
+
+.float-search-modal.float-search-width {
+	width: 1200px;
+}
+
+.float-search-modal-search-ctn, .float-search-modal-file-ctn {
+	height: 100%;
+	width: 100%;
+}
+
+.float-search-modal-file-ctn .view-header {
+	display: none;
+}
+
+.float-search-modal-content {
 	height: 800px;
+	display: flex;
+	align-items: center;
+    flex-direction: row;
 }
 
 .fs-content .workspace-split.mod-vertical {
@@ -16,6 +36,10 @@ If your plugin does not need CSS, delete this file.
 
 .fs-content {
 	height: 100%;
+}
+
+.fs-content .cm-scroller {
+    margin-top: 20px;
 }
 
 .fs-block {

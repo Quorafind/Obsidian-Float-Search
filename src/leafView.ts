@@ -31,7 +31,7 @@ export interface EmbeddedViewParent {
 const popovers = new WeakMap<Element, EmbeddedView>();
 type ConstructableWorkspaceSplit = new (ws: Workspace, dir: "horizontal"|"vertical") => WorkspaceSplit;
 
-export function isDailyNoteLeaf(leaf: WorkspaceLeaf) {
+export function isEmebeddedLeaf(leaf: WorkspaceLeaf) {
     // Work around missing enhance.js API by checking match condition instead of looking up parent
     return leaf.containerEl.matches(".fs-block.fs-leaf-view .workspace-leaf");
 }
