@@ -205,6 +205,7 @@ class FloatSearchModal extends Modal {
 		inputEl.focus();
 		inputEl.onkeydown = (e) => {
 			const currentView = this.searchLeaf.view as SearchView;
+			console.log(this.fileLeaf?.view);
 			switch (e.key) {
 				case "ArrowDown":
 					if (e.shiftKey) {
@@ -257,6 +258,21 @@ class FloatSearchModal extends Modal {
                         }}) : this.initFileView(file, undefined);
 					}
 					break;
+				case "e":
+					if(e.ctrlKey) {
+						e.preventDefault();
+						if(this.fileLeaf) {
+							const estate = this.fileLeaf.getViewState();
+                			estate.state.mode = "preview" === estate.state.mode ? "source" : "preview";
+							this.fileLeaf.setViewState(estate, {
+								focus: !0
+							});
+							setTimeout(()=>{
+								(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+							}, 0);
+						}
+						break;
+					}
 			}
 		}
 	}
@@ -273,9 +289,12 @@ class FloatSearchModal extends Modal {
 				let targetElement = e.target as HTMLElement | null;
 
 				if((this.searchCtnEl as Node).contains(targetElement as Node)) {
+					if(((this.searchLeaf.view as SearchView).searchComponent.inputEl as Node).contains(targetElement as Node) || ((this.searchLeaf.view as SearchView).headerDom.navHeaderEl as Node).contains(targetElement as Node)) {
+						return;
+					}
+
 					while (targetElement) {
 						if (targetElement.classList.contains('tree-item')) {
-							console.log(targetElement);
 							break;
 						}
 						targetElement = targetElement.parentElement;
@@ -287,7 +306,6 @@ class FloatSearchModal extends Modal {
 					const currentView = this.searchLeaf.view as SearchView;
 					if(file) {
 						const item = currentView.dom.resultDomLookup.get(file);
-						console.log(item);
 						currentView.dom.setFocusedItem(item);
 						this.initFileView(file, undefined);
 						(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
@@ -297,8 +315,6 @@ class FloatSearchModal extends Modal {
 				
 				return;
 			}
-
-			console.log(e.target);
 
 			const target = e.target as HTMLElement;
 			const classList = target.classList;
