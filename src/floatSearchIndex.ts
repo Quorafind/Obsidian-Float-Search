@@ -1,7 +1,12 @@
 import {
 	App,
+	Editor,
+	MarkdownRenderer,
+	MarkdownView,
+	Menu,
 	Modal, OpenViewState,
 	Plugin, SearchView,
+	setIcon,
 	TFile,
 	Workspace,
 	WorkspaceContainer, WorkspaceItem,
@@ -11,26 +16,24 @@ import { EmbeddedView, isEmebeddedLeaf, spawnLeafView } from "./leafView";
 import { around } from "monkey-around";
 
 export default class FloatSearchPlugin extends Plugin {
+	private state: any;
+	private modal: FloatSearchModal;
 
 	async onload() {
 		this.patchWorkspace();
 		this.patchWorkspaceLeaf();
-
-		this.addCommand({
-		    id: 'float-search',
-		    name: 'Search Obsidian In Modal',
-		    callback: () => {
-				new FloatSearchModal(this.app, this).open();
-			}
-		});
+		this.registerObsidianCommands();
 
 		this.addRibbonIcon('search', 'Search Obsidian In Modal', () => {
-			new FloatSearchModal(this.app, this).open();
+			this.modal = new FloatSearchModal((state)=>{
+				this.state = state;
+			},this.app, this, this.state);
+			this.modal.open();
 		});
 	}
 
 	onunload() {
-
+		this.state = undefined;
 	}
 
 	patchWorkspace() {
@@ -145,6 +148,48 @@ export default class FloatSearchPlugin extends Plugin {
 			}),
 		);
 	}
+
+	registerObsidianCommands() {
+		this.registerObsidianProtocolHandler("fs", (path)=>{
+			this.modal = new FloatSearchModal((state)=>{
+				this.state = state;
+			},this.app, this, { query: path.query, uri: true });
+			this.modal.open();
+		});
+
+		this.registerEvent(
+			this.app.workspace.on('editor-menu', (menu: Menu, editor: Editor, view: MarkdownView) => {
+				if (!editor) {
+					return;
+				}
+				if (editor.getSelection().length === 0) {
+					return;
+				}
+				const selection = editor.getSelection();
+
+				menu.addItem((item) => {
+					// Add sub menu
+					item.setTitle('Search "' + selection + '"').setIcon("search")
+						.onClick(()=>{
+							this.modal = new FloatSearchModal((state)=>{
+								this.state = state;
+							},this.app, this, { query: selection, uri: true });
+							this.modal.open();
+						})
+				})
+			}))
+
+		this.addCommand({
+			id: 'float-search',
+			name: 'Search Obsidian In Modal',
+			callback: () => {
+				this.modal = new FloatSearchModal((state)=>{
+					this.state = state;
+				},this.app, this, this.state);
+				this.modal.open();
+			}
+		});
+	}
 }
 
 
@@ -152,22 +197,31 @@ class FloatSearchModal extends Modal {
 	private readonly plugin: FloatSearchPlugin;
 	private searchEmbeddedView: EmbeddedView;
 	private fileEmbeddedView: EmbeddedView;
-	private searchLeaf: WorkspaceLeaf;
-	private fileLeaf: WorkspaceLeaf | undefined;
+
+	searchLeaf: WorkspaceLeaf;
+	fileLeaf: WorkspaceLeaf | undefined;
+
+	private cb: (state: any)=> void;
+	private state: any;
 
 	private searchCtnEl: HTMLElement;
+	private instructionsEl: HTMLElement;
 	private fileEl: HTMLElement;
 
-	constructor(app: App, plugin: FloatSearchPlugin) {
+	constructor(cb: (state: any)=> void, app: App, plugin: FloatSearchPlugin, state: any) {
 		super(app);
 		this.plugin = plugin;
+		this.cb = cb;
+		this.state = state;
 	}
 
 	async onOpen() {
 		const { contentEl, containerEl, modalEl } = this;
 
 		this.searchCtnEl = contentEl.createDiv({ cls: "float-search-modal-search-ctn" });
+		this.instructionsEl = modalEl.createDiv({ cls: "float-search-modal-instructions" });
 
+		this.initInstructions(this.instructionsEl);
 		this.initCss(contentEl, modalEl, containerEl);
 		await this.initSearchView(this.searchCtnEl);
 		this.initInput();
@@ -176,11 +230,66 @@ class FloatSearchModal extends Modal {
 
 	onClose() {
 		const { contentEl } = this;
+
+		this.cb(this.searchLeaf.view.getState());
+
 		this.searchLeaf.detach();
 		this.fileLeaf?.detach();
 		this.searchEmbeddedView.unload();
 		this.fileEmbeddedView?.unload();
 		contentEl.empty();
+	}
+
+	initInstructions(instructionsEl: HTMLElement) {
+		const navigateInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-navigate" });
+		const enterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-enter" });
+		// const closeInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-close" });
+		// const ctrlEnterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-ctrl-enter" });
+		const altEnterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-alt-enter" });
+		
+		const tabInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-tab" });
+		// const shiftTabInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-shift-tab" });
+		const switchInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-switch" });
+
+		const navigateIconEl = navigateInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const navigateTextEl = navigateInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		navigateIconEl.setText("↑↓");
+		navigateTextEl.setText("Navigate");
+
+		const enterIconEl = enterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const enterTextEl = enterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		enterIconEl.setText("↵");
+		enterTextEl.setText("Open in background");
+
+		// const ctrlEnterIconEl = ctrlEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		// const ctrlEnterTextEl = ctrlEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		// ctrlEnterIconEl.setText("Ctrl+↵");
+		// ctrlEnterTextEl.setText("New pane in background");
+
+		const altEnterIconEl = altEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const altEnterTextEl = altEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		altEnterIconEl.setText("Alt+↵");
+		altEnterTextEl.setText("Open File and Close");
+
+		// const closeIconEl = closeInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		// const closeTextEl = closeInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		// closeIconEl.setText("Esc");
+		// closeTextEl.setText("Close");
+
+		const tabIconEl = tabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const tabTextEl = tabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		tabIconEl.setText("Tab/Shift+Tab");
+		tabTextEl.setText("Preview/Close Preview");
+
+		// const shiftTabIconEl = shiftTabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		// const shiftTabTextEl = shiftTabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		// shiftTabIconEl.setText("Shift+Tab");
+		// shiftTabTextEl.setText("Close Preview");
+
+		const switchIconEl = switchInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const switchTextEl = switchInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		switchIconEl.setText("Ctrl+G");
+		switchTextEl.setText("Switch Between Search and File View");
 	}
 
 	initCss(contentEl: HTMLElement, modalEl: HTMLElement, containerEl: HTMLElement) {
@@ -198,6 +307,19 @@ class FloatSearchModal extends Modal {
 		await this.searchLeaf.setViewState({
 			type: "search",
 		});
+
+
+		if(this.state?.uri) {
+			const tempState = this.searchLeaf.view.getState();
+			tempState.query = this.state.query;
+			this.searchLeaf.view.setState(tempState, true);
+
+			return;
+		}
+		if(this.state) {
+			this.state.query = "";
+			this.searchLeaf.view.setState(this.state, true);
+		}
 	}
 
 	initInput() {
@@ -205,7 +327,6 @@ class FloatSearchModal extends Modal {
 		inputEl.focus();
 		inputEl.onkeydown = (e) => {
 			const currentView = this.searchLeaf.view as SearchView;
-			console.log(this.fileLeaf?.view);
 			switch (e.key) {
 				case "ArrowDown":
 					if (e.shiftKey) {
@@ -227,6 +348,13 @@ class FloatSearchModal extends Modal {
 					currentView.onKeyArrowLeftInFocus(e);
 					break;
 				case "ArrowRight":
+					if(e.ctrlKey) {
+						if(this.fileLeaf) {
+							app.workspace.setActiveLeaf(this.fileLeaf, {
+								focus: true,
+							});
+						}
+					}
 					currentView.onKeyArrowRightInFocus(e);
 					break;
 				case "Enter":
@@ -273,6 +401,13 @@ class FloatSearchModal extends Modal {
 						}
 						break;
 					}
+				case "g":
+					if(this.fileLeaf && e.ctrlKey) {
+						app.workspace.setActiveLeaf(this.fileLeaf, {
+							focus: true,
+						});
+					}
+					break;
 			}
 		}
 	}
@@ -287,9 +422,10 @@ class FloatSearchModal extends Modal {
 
 			if(this.fileLeaf) {
 				let targetElement = e.target as HTMLElement | null;
+				const currentView = this.searchLeaf.view as SearchView;
 
 				if((this.searchCtnEl as Node).contains(targetElement as Node)) {
-					if(((this.searchLeaf.view as SearchView).searchComponent.inputEl as Node).contains(targetElement as Node) || ((this.searchLeaf.view as SearchView).headerDom.navHeaderEl as Node).contains(targetElement as Node)) {
+					if((currentView.searchComponent.inputEl as Node).contains(targetElement as Node) || (currentView.headerDom.navHeaderEl as Node).contains(targetElement as Node)) {
 						return;
 					}
 
@@ -298,12 +434,13 @@ class FloatSearchModal extends Modal {
 							break;
 						}
 						targetElement = targetElement.parentElement;
-						}
+					}
+					if(!targetElement) return;
+
 					const fileInnerEl = targetElement?.getElementsByClassName("tree-item-inner")[0] as HTMLElement;
 					const innerText = fileInnerEl.innerText;
 					const file = app.metadataCache.getFirstLinkpathDest(innerText, "");
 					
-					const currentView = this.searchLeaf.view as SearchView;
 					if(file) {
 						const item = currentView.dom.resultDomLookup.get(file);
 						currentView.dom.setFocusedItem(item);
@@ -351,6 +488,14 @@ class FloatSearchModal extends Modal {
 		const { contentEl } = this;
 		this.fileEl = contentEl.createDiv({ cls: "float-search-modal-file-ctn" });
 		this.modalEl.toggleClass("float-search-width", true);
+		this.fileEl.onkeydown = (e) => {
+			if(e.ctrlKey && e.key === "g") {
+				e.preventDefault();
+				e.stopPropagation();
+				
+				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+			}
+		}
 
 		const [createdLeaf, embeddedView] = spawnLeafView(this.plugin, this.fileEl);
 		this.fileLeaf = createdLeaf;
@@ -363,5 +508,6 @@ class FloatSearchModal extends Modal {
 		});
 
 		(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+		
 	}
 }

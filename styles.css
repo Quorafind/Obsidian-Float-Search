@@ -8,6 +8,8 @@ If your plugin does not need CSS, delete this file.
 */
 .float-search-modal {
 	width: 600px;
+
+	padding-bottom: 0;
 }
 
 .float-search-modal.float-search-width {
@@ -52,4 +54,23 @@ If your plugin does not need CSS, delete this file.
 
 .modal-container.float-search-modal-container.mod-dim {
 	z-index: 30;
+}
+
+
+.float-search-modal-instructions {
+    border-top: 1px solid var(--background-secondary);
+    user-select: none;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    padding: var(--size-4-2);
+    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--size-4-3);
+}
+
+.float-search-modal-instructions .float-search-modal-instructions-key {
+	font-weight: var(--font-extrabold);
+    margin-right: var(--size-2-2);
 }

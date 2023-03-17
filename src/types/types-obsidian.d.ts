@@ -209,4 +209,8 @@ declare module "obsidian" {
         x: number;
         y: number;
     }
+
+    interface Plugin {
+        registerGlobalCommand(command: Command): void;
+    }
 }
