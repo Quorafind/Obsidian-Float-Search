@@ -1,7 +1,7 @@
 {
 	"id": "float-search",
 	"name": "Floating Search",
-	"version": "2.8.0",
+	"version": "2.9.0",
 	"minAppVersion": "0.15.0",
 	"description": "You can use search view in modal now.",
 	"author": "Boninall",
