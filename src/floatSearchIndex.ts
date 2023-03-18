@@ -331,6 +331,11 @@ class FloatSearchModal extends Modal {
 				case "ArrowDown":
 					if (e.shiftKey) {
 						currentView.onKeyShowMoreAfter(e);
+						if(currentView.dom.focusedItem) {
+							if(currentView.dom.focusedItem.collapseEl) {
+								currentView.dom.focusedItem.collapseEl.click();
+							}
+						}
 						break;
 					} else {
 						currentView.onKeyArrowDownInFocus(e);
@@ -339,6 +344,11 @@ class FloatSearchModal extends Modal {
 				case "ArrowUp":
 					if (e.shiftKey) {
 						currentView.onKeyShowMoreBefore(e);
+						if(currentView.dom.focusedItem) {
+							if(currentView.dom.focusedItem.collapseEl) {
+								currentView.dom.focusedItem.collapseEl.click();
+							}
+						}
 						break;
 					} else {
 						currentView.onKeyArrowUpInFocus(e);
