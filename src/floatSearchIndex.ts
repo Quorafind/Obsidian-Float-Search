@@ -1,12 +1,10 @@
 import {
 	App,
 	Editor,
-	MarkdownRenderer,
 	MarkdownView,
 	Menu,
 	Modal, OpenViewState,
 	Plugin, SearchView,
-	setIcon,
 	TFile,
 	Workspace,
 	WorkspaceContainer, WorkspaceItem,
@@ -22,6 +20,7 @@ export default class FloatSearchPlugin extends Plugin {
 	async onload() {
 		this.patchWorkspace();
 		this.patchWorkspaceLeaf();
+
 		this.registerObsidianCommands();
 
 		this.addRibbonIcon('search', 'Search Obsidian In Modal', () => {
@@ -129,7 +128,7 @@ export default class FloatSearchPlugin extends Plugin {
 								1,
 							);
 							const recentFiles = this.app.plugins.plugins["recent-files-obsidian"];
-							if (recentFiles)
+							if (recentFiles) {
 								setTimeout(
 									around(recentFiles, {
 										shouldAddFile(old) {
@@ -141,8 +140,29 @@ export default class FloatSearchPlugin extends Plugin {
 									}),
 									1,
 								);
+							}
+							
 						}
-						return old.call(this, file, openState);
+
+						const view = old.call(this, file, openState);
+						setTimeout(()=>{
+							const fsCtnEl = (this.parent.containerEl as HTMLElement).parentElement;
+							if(!(fsCtnEl?.classList.contains("fs-content"))) return;
+							if(file.extension != "canvas" ) return;
+
+							const canvas = this.view.canvas;
+							setTimeout(()=>{
+								if(canvas && openState?.eState?.match) {
+									let node = canvas.data.nodes?.find((e: any)=> e.text === openState.eState.match.content);
+									node = canvas.nodes.get(node.id);
+
+									canvas.selectOnly(node);
+									canvas.zoomToSelection();
+							}
+							},20);
+						}, 1);
+
+						return view;
 					}
 				}
 			}),
@@ -312,13 +332,15 @@ class FloatSearchModal extends Modal {
 		if(this.state?.uri) {
 			const tempState = this.searchLeaf.view.getState();
 			tempState.query = this.state.query;
-			this.searchLeaf.view.setState(tempState, true);
+			await this.searchLeaf.view.setState(tempState, true);
 
 			return;
 		}
 		if(this.state) {
 			this.state.query = "";
-			this.searchLeaf.view.setState(this.state, true);
+			setTimeout(()=>{
+				this.searchLeaf.view.setState(this.state, true);
+			}, 0);
 		}
 	}
 
@@ -430,15 +452,12 @@ class FloatSearchModal extends Modal {
 				return;
 			}
 
+			let targetElement = e.target as HTMLElement | null;
+
 			if(this.fileLeaf) {
-				let targetElement = e.target as HTMLElement | null;
 				const currentView = this.searchLeaf.view as SearchView;
 
 				if((this.searchCtnEl as Node).contains(targetElement as Node)) {
-					if((currentView.searchComponent.inputEl as Node).contains(targetElement as Node) || (currentView.headerDom.navHeaderEl as Node).contains(targetElement as Node)) {
-						return;
-					}
-
 					while (targetElement) {
 						if (targetElement.classList.contains('tree-item')) {
 							break;
@@ -463,21 +482,12 @@ class FloatSearchModal extends Modal {
 				return;
 			}
 
-			const target = e.target as HTMLElement;
-			const classList = target.classList;
-
-			const navElement = contentEl.getElementsByClassName('nav-header')[0];
-			if (e.target !== navElement && (navElement as Node).contains(e.target as Node)) {
-				return;
-			}
-
-			const fileElement = contentEl.getElementsByClassName('float-search-modal-file-ctn')[0];
-			if ((fileElement as Node)?.contains(e.target as Node)) {
-				return;
-			}
-
-			if(!(classList.contains("tree-item-icon") || classList.contains("float-search-modal-content") || classList.contains("right-triangle") || target.parentElement?.classList.contains("right-triangle") || classList.contains("search-input-container") || target?.parentElement?.classList.contains("search-input-container") || classList.contains("search-result-hover-button"))) {
-				this.close();
+			while (targetElement) {
+				if (targetElement.classList.contains('tree-item')) {
+					this.close();
+					break;
+				}
+				targetElement = targetElement.parentElement;
 			}
 		}
 	}
