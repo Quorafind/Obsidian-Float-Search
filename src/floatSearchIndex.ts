@@ -15,7 +15,18 @@ import { around } from "monkey-around";
 
 export default class FloatSearchPlugin extends Plugin {
 	private state: any;
+	private applyDebounceTimer = 0;
 	private modal: FloatSearchModal;
+
+	public applySettingsUpdate() {
+		clearTimeout(this.applyDebounceTimer);
+		this.applyDebounceTimer = window.setTimeout(() => {
+			this.state = {
+				...this.state,
+				query: "",
+			};
+		}, 10000);
+	}
 
 	async onload() {
 		this.patchWorkspace();
@@ -26,6 +37,7 @@ export default class FloatSearchPlugin extends Plugin {
 		this.addRibbonIcon('search', 'Search Obsidian In Modal', () => {
 			this.modal = new FloatSearchModal((state)=>{
 				this.state = state;
+				this.applySettingsUpdate();
 			},this.app, this, this.state);
 			this.modal.open();
 		});
@@ -177,7 +189,8 @@ export default class FloatSearchPlugin extends Plugin {
 		this.registerObsidianProtocolHandler("fs", (path)=>{
 			this.modal = new FloatSearchModal((state)=>{
 				this.state = state;
-			},this.app, this, { query: path.query, uri: true });
+				this.applySettingsUpdate();
+			},this.app, this, { query: path.query, current: false });
 			this.modal.open();
 		});
 
@@ -197,19 +210,32 @@ export default class FloatSearchPlugin extends Plugin {
 						.onClick(()=>{
 							this.modal = new FloatSearchModal((state)=>{
 								this.state = state;
-							},this.app, this, { query: selection, uri: true });
+								this.applySettingsUpdate();
+							},this.app, this, { query: selection, current: false });
 							this.modal.open();
 						})
 				})
 			}))
 
 		this.addCommand({
-			id: 'float-search',
+			id: 'search-obsidian-globally',
 			name: 'Search Obsidian Globally',
 			callback: () => {
 				this.modal = new FloatSearchModal((state)=>{
 					this.state = state;
-				},this.app, this, this.state);
+				},this.app, this, {...this.state, query: "", current: false});
+				this.modal.open();
+			}
+		});
+
+		
+		this.addCommand({
+			id: 'search-obsidian-globally-state',
+			name: 'Search Obsidian Globally (With Last State)',
+			callback: () => {
+				this.modal = new FloatSearchModal((state)=>{
+					this.state = state;
+				},this.app, this, {...this.state, current: false});
 				this.modal.open();
 			}
 		});
@@ -230,7 +256,8 @@ export default class FloatSearchPlugin extends Plugin {
 
 				this.modal = new FloatSearchModal((state)=>{
 					this.state = state;
-				},this.app, this, { query: " path:" + currentFile.path, uri: true });
+					this.applySettingsUpdate();
+				},this.app, this, {...this.state, query: " path:" + currentFile.path, current: true });
 				this.modal.open();
 			}
 		})
@@ -365,20 +392,13 @@ class FloatSearchModal extends Modal {
 			type: "search",
 		});
 
-
-		if(this.state?.uri) {
-			const tempState = this.searchLeaf.view.getState();
-			tempState.query = this.state.query;
-			await this.searchLeaf.view.setState(tempState, true);
-			(this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0);
-			return;
-		}
-		if(this.state) {
-			this.state.query = "";
-			setTimeout(()=>{
-				this.searchLeaf.view.setState(this.state, true);
-			}, 0);
-		}
+		setTimeout(async ()=>{
+			await this.searchLeaf.view.setState(this.state, true);
+			this.state?.current ? (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0) : (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(this.state?.query?.length, this.state?.query?.length);
+		}, 0);
+		
+		return;
+		
 	}
 
 	initInput() {
@@ -473,6 +493,7 @@ class FloatSearchModal extends Modal {
 					}
 				case "g":
 					if(this.fileLeaf && e.ctrlKey) {
+						e.preventDefault();
 						app.workspace.setActiveLeaf(this.fileLeaf, {
 							focus: true,
 						});
@@ -484,6 +505,7 @@ class FloatSearchModal extends Modal {
 						const text = currentView.dom.focusedItem.el.innerText;
 						navigator.clipboard.writeText(text);
 					}
+				
 			}
 		}
 	}
