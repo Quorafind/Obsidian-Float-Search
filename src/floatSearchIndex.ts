@@ -437,13 +437,6 @@ class FloatSearchModal extends Modal {
 					currentView.onKeyArrowLeftInFocus(e);
 					break;
 				case "ArrowRight":
-					if(e.ctrlKey) {
-						if(this.fileLeaf) {
-							app.workspace.setActiveLeaf(this.fileLeaf, {
-								focus: true,
-							});
-						}
-					}
 					currentView.onKeyArrowRightInFocus(e);
 					break;
 				case "Enter":
