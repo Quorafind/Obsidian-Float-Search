@@ -3,7 +3,7 @@ import {
 	Editor,
 	MarkdownView,
 	Menu,
-	Modal, OpenViewState,
+	Modal, Notice, OpenViewState,
 	Plugin, SearchView,
 	TFile,
 	Workspace,
@@ -205,7 +205,7 @@ export default class FloatSearchPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'float-search',
-			name: 'Search Obsidian In Modal',
+			name: 'Search Obsidian Globally',
 			callback: () => {
 				this.modal = new FloatSearchModal((state)=>{
 					this.state = state;
@@ -213,6 +213,27 @@ export default class FloatSearchPlugin extends Plugin {
 				this.modal.open();
 			}
 		});
+
+		this.addCommand({
+			id: 'search-in-current-file',
+			name: 'Search In Current File',
+			callback: () => {
+				const activeLeaf = this.app.workspace.activeLeaf;
+				if(!activeLeaf) return;
+				const viewType = activeLeaf.view.getViewType();
+				if(viewType !== "markdown" && viewType !== "canvas") {
+					new Notice("This command only works in markdown and canvas files.", 3000);
+					return;
+				}
+
+				const currentFile = activeLeaf.view.file;
+
+				this.modal = new FloatSearchModal((state)=>{
+					this.state = state;
+				},this.app, this, { query: " path:" + currentFile.path, uri: true });
+				this.modal.open();
+			}
+		})
 	}
 }
 
@@ -266,6 +287,7 @@ class FloatSearchModal extends Modal {
 
 	initInstructions(instructionsEl: HTMLElement) {
 		const navigateInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-navigate" });
+		const collapseInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-collapse" });
 		const enterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-enter" });
 		// const closeInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-close" });
 		// const ctrlEnterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-ctrl-enter" });
@@ -279,6 +301,11 @@ class FloatSearchModal extends Modal {
 		const navigateTextEl = navigateInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
 		navigateIconEl.setText("↑↓");
 		navigateTextEl.setText("Navigate");
+
+		const collapseIconEl = collapseInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const collapseTextEl = collapseInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		collapseIconEl.setText("Shift+↑↓");
+		collapseTextEl.setText("Collapse/Expand");
 
 		const enterIconEl = enterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
 		const enterTextEl = enterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
@@ -343,7 +370,7 @@ class FloatSearchModal extends Modal {
 			const tempState = this.searchLeaf.view.getState();
 			tempState.query = this.state.query;
 			await this.searchLeaf.view.setState(tempState, true);
-
+			(this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0);
 			return;
 		}
 		if(this.state) {
@@ -364,8 +391,8 @@ class FloatSearchModal extends Modal {
 					if (e.shiftKey) {
 						currentView.onKeyShowMoreAfter(e);
 						if(currentView.dom.focusedItem) {
-							if(currentView.dom.focusedItem.collapseEl) {
-								currentView.dom.focusedItem.collapseEl.click();
+							if(currentView.dom.focusedItem.collapsible) {
+								currentView.dom.focusedItem.setCollapse(false);
 							}
 						}
 						break;
@@ -378,7 +405,7 @@ class FloatSearchModal extends Modal {
 						currentView.onKeyShowMoreBefore(e);
 						if(currentView.dom.focusedItem) {
 							if(currentView.dom.focusedItem.collapseEl) {
-								currentView.dom.focusedItem.collapseEl.click();
+								currentView.dom.focusedItem.setCollapse(true);
 							}
 						}
 						break;
@@ -406,6 +433,7 @@ class FloatSearchModal extends Modal {
 					}
 					break;
 				case "Tab":
+					e.preventDefault();
 					if(e.shiftKey) {
 						if(this.fileLeaf) {
 							this.fileLeaf?.detach();
@@ -450,6 +478,12 @@ class FloatSearchModal extends Modal {
 						});
 					}
 					break;
+				case "C":
+					if(e.ctrlKey && e.shiftKey) {
+						e.preventDefault();
+						const text = currentView.dom.focusedItem.el.innerText;
+						navigator.clipboard.writeText(text);
+					}
 			}
 		}
 	}
