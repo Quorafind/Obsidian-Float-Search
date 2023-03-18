@@ -42,7 +42,11 @@ export default class FloatSearchPlugin extends Plugin {
 				function (...args) {
 					const activeLeaf = this.activeLeaf;
 					if(activeLeaf) {
-						if(activeLeaf.pinned === true && activeLeaf.view.getViewType() === "search") {
+						const fsCtnEl = (activeLeaf.parent.containerEl as HTMLElement).parentElement;
+						if(fsCtnEl?.classList.contains("fs-content")) {
+							if(activeLeaf.view.getViewType() === "markdown") {
+								return activeLeaf;
+							}
 							const newLeaf = app.workspace.getUnpinnedLeaf();
 							if(newLeaf) {
 								this.setActiveLeaf(newLeaf);
@@ -310,6 +314,12 @@ class FloatSearchModal extends Modal {
 		const switchTextEl = switchInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
 		switchIconEl.setText("Ctrl+G");
 		switchTextEl.setText("Switch Between Search and File View");
+
+		const clickInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-click" });
+		const clickIconEl = clickInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
+		const clickTextEl = clickInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
+		clickIconEl.setText("Alt+Click");
+		clickTextEl.setText("Close Modal While In File View");
 	}
 
 	initCss(contentEl: HTMLElement, modalEl: HTMLElement, containerEl: HTMLElement) {
@@ -454,6 +464,18 @@ class FloatSearchModal extends Modal {
 
 			let targetElement = e.target as HTMLElement | null;
 
+
+			if(e.altKey || !this.fileLeaf) {
+				while (targetElement) {
+					if (targetElement.classList.contains('tree-item')) {
+						this.close();
+						break;
+					}
+					targetElement = targetElement.parentElement;
+				}
+				return;
+			}
+
 			if(this.fileLeaf) {
 				const currentView = this.searchLeaf.view as SearchView;
 
@@ -480,14 +502,6 @@ class FloatSearchModal extends Modal {
 
 				
 				return;
-			}
-
-			while (targetElement) {
-				if (targetElement.classList.contains('tree-item')) {
-					this.close();
-					break;
-				}
-				targetElement = targetElement.parentElement;
 			}
 		}
 	}
