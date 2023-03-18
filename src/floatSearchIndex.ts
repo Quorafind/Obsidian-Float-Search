@@ -25,7 +25,7 @@ export default class FloatSearchPlugin extends Plugin {
 				...this.state,
 				query: "",
 			};
-		}, 10000);
+		}, 30000);
 	}
 
 	async onload() {
