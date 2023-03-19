@@ -32,6 +32,14 @@ If your plugin does not need CSS, delete this file.
     flex-direction: row;
 }
 
+.float-search-modal-file-ctn .view-content {
+    height: 100%;
+}
+
+.float-search-modal .modal-close-button {
+	z-index: 40;
+}
+
 .fs-content .workspace-split.mod-vertical {
 	height: 100%;
 }
@@ -77,4 +85,12 @@ If your plugin does not need CSS, delete this file.
 
 .float-search-modal-content:has(.float-search-modal-file-ctn) .float-search-modal-search-ctn {
     border-right: 1px solid var(--background-secondary);
+}
+
+.float-search-modal-file-ctn:has(.mod-active) {
+    border-bottom: 3px solid var(--color-accent);
+}
+
+.float-search-modal-file-ctn:has(.mod-active) .cm-scroller {
+	background-color: var(--background-primary);
 }

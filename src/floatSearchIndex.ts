@@ -515,7 +515,6 @@ class FloatSearchModal extends Modal {
 
 			let targetElement = e.target as HTMLElement | null;
 
-
 			if(e.altKey || !this.fileLeaf) {
 				while (targetElement) {
 					if (targetElement.classList.contains('tree-item')) {
@@ -589,6 +588,7 @@ class FloatSearchModal extends Modal {
 			if(e.ctrlKey && e.key === "g") {
 				e.preventDefault();
 				e.stopPropagation();
+				
 				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
 			}
 

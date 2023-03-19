@@ -64,6 +64,13 @@ declare global {
 
 declare module "obsidian" {
     interface App {
+        commands: {
+            listCommands(): Command[];
+            findCommand(id: string): Command;
+            removeCommand(id: string): void;
+            executeCommandById(id: string): void;
+            commands: Record<string, Command>;
+        };
         internalPlugins: {
             plugins: InternalPlugins;
             getPluginById<T extends keyof InternalPlugins>(id: T): InternalPlugins[T];
