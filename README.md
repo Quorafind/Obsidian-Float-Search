@@ -23,6 +23,7 @@ You can use search view in modal now.
     - When a search result is focused, press Ctrl+Shift+C to copy the selected search result content;
     - When a file is being previewed, press Ctrl+E to toggle the file's reading mode;
     - When a file is being previewed, press Ctrl+G to jump from the input box to the content of the previewed file, or from the previewed file content back to the input box;
+    - When a file is being previewed, press Tab twice to jump into the content of the previewed file, or use Ctrl+Tab to switch back to the input box from the previewed file.
 3. **Mouse click behavior**:
     - When a file is being previewed:
         - Clicking a new search result with the mouse will not automatically close the popup, but instead switch the file in the preview window;
@@ -51,6 +52,7 @@ You can use search view in modal now.
     - 当有一个搜索结果被聚焦时，按 Ctrl+Shift+C 来复制选中的搜索结果内容；
     - 当有一个文件正在被预览时，按 Ctrl+E 来切换文件的阅读模式；
     - 当有一个文件正在被预览时，按 Ctrl+G 来从输入框跳转到预览文件的内容中，或从预览文件内容中跳转回输入框；
+    - 当有一个文件正在被预览时，按两次 Tab 来跳转到预览文件的内容中，或用 Ctrl+Tab 从预览文件中跳转回输入框；
 3. **鼠标点击的行为**：
     - 当存在文件在预览中时：
         - 用鼠标点击新的搜索结果不会再自动关闭弹窗，而是在切换预览文件窗口的文件；
