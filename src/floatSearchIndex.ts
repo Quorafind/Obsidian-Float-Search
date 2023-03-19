@@ -276,6 +276,8 @@ class FloatSearchModal extends Modal {
 	private cb: (state: any)=> void;
 	private state: any;
 
+	private fileState: any;
+
 	private searchCtnEl: HTMLElement;
 	private instructionsEl: HTMLElement;
 	private fileEl: HTMLElement;
@@ -561,9 +563,21 @@ class FloatSearchModal extends Modal {
 				active: false,
 				eState: state
 			});
-			setTimeout(() => {
-				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
-			}, 0);
+
+			if(this.fileState?.match?.matches[0] === state.match?.matches[0] && state && this.fileState) {
+				setTimeout(()=>{
+					if(this.fileLeaf) {
+						app.workspace.setActiveLeaf(this.fileLeaf, {
+							focus: true,
+						});
+					}
+				}, 0);
+			} else {
+				this.fileState = state;
+				setTimeout(() => {
+					(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+				}, 0);
+			}
 			
 			return;
 		}
@@ -575,10 +589,18 @@ class FloatSearchModal extends Modal {
 			if(e.ctrlKey && e.key === "g") {
 				e.preventDefault();
 				e.stopPropagation();
-				
+				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+			}
+
+			if(e.key === "Tab" && e.ctrlKey) {
+				e.preventDefault();
+				e.stopPropagation();
+
 				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
 			}
 		}
+
+
 
 		const [createdLeaf, embeddedView] = spawnLeafView(this.plugin, this.fileEl);
 		this.fileLeaf = createdLeaf;
@@ -589,6 +611,7 @@ class FloatSearchModal extends Modal {
 			active: false,
 			eState: state
 		});
+		this.fileState = state;
 
 		(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
 		
