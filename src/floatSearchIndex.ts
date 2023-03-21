@@ -5,6 +5,7 @@ import {
 	Menu,
 	Modal, Notice, OpenViewState,
 	Plugin, SearchView,
+	TAbstractFile,
 	TFile,
 	Workspace,
 	WorkspaceContainer, WorkspaceItem,
@@ -32,7 +33,10 @@ export default class FloatSearchPlugin extends Plugin {
 		this.patchWorkspace();
 		this.patchWorkspaceLeaf();
 
+		this.registerObsidianURIHandler();
 		this.registerObsidianCommands();
+		this.registerEditorMenuHandler();
+		this.registerContextMenuHandler();
 
 		this.addRibbonIcon('search', 'Search Obsidian In Modal', () => {
 			this.modal = new FloatSearchModal((state)=>{
@@ -185,7 +189,7 @@ export default class FloatSearchPlugin extends Plugin {
 		);
 	}
 
-	registerObsidianCommands() {
+	registerObsidianURIHandler() {
 		this.registerObsidianProtocolHandler("fs", (path)=>{
 			this.modal = new FloatSearchModal((state)=>{
 				this.state = state;
@@ -193,30 +197,9 @@ export default class FloatSearchPlugin extends Plugin {
 			},this.app, this, { query: path.query, current: false });
 			this.modal.open();
 		});
+	}
 
-		this.registerEvent(
-			this.app.workspace.on('editor-menu', (menu: Menu, editor: Editor, view: MarkdownView) => {
-				if (!editor) {
-					return;
-				}
-				if (editor.getSelection().length === 0) {
-					return;
-				}
-				const selection = editor.getSelection();
-
-				menu.addItem((item) => {
-					// Add sub menu
-					item.setTitle('Search "' + selection + '"').setIcon("search")
-						.onClick(()=>{
-							this.modal = new FloatSearchModal((state)=>{
-								this.state = state;
-								this.applySettingsUpdate();
-							},this.app, this, { query: selection, current: false });
-							this.modal.open();
-						})
-				})
-			}))
-
+	registerObsidianCommands() {
 		this.addCommand({
 			id: 'search-obsidian-globally',
 			name: 'Search Obsidian Globally',
@@ -262,6 +245,63 @@ export default class FloatSearchPlugin extends Plugin {
 			}
 		})
 	}
+
+	registerEditorMenuHandler() {
+		this.registerEvent(
+			this.app.workspace.on('editor-menu', (menu: Menu, editor: Editor, view: MarkdownView) => {
+				if (!editor) {
+					return;
+				}
+				if (editor.getSelection().length === 0) {
+					return;
+				}
+				const selection = editor.getSelection();
+
+				menu.addItem((item) => {
+					// Add sub menu
+					item.setTitle('Search "' + selection + '"').setIcon("search")
+						.onClick(()=>{
+							this.modal = new FloatSearchModal((state)=>{
+								this.state = state;
+								this.applySettingsUpdate();
+							},this.app, this, { query: selection, current: false });
+							this.modal.open();
+						})
+				})
+			}))
+	}
+
+	registerContextMenuHandler() {
+		this.registerEvent(
+		  this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile, source: string, leaf?: WorkspaceLeaf) => {
+			const popover = leaf ? EmbeddedView.forLeaf(leaf) : undefined;
+			if (file instanceof TFile && !popover && !leaf) {
+			  menu.addItem(item => {
+				item
+				  .setIcon("popup-open")
+				  .setTitle("Open in Float Preview")
+				  .onClick(async () => {
+					if(this.modal) {
+						await this.modal.initFileView(file, undefined);
+
+						return;
+					}
+
+					this.modal = new FloatSearchModal((state)=>{
+						this.state = state;
+						this.applySettingsUpdate();
+					},this.app, this, { query: "", current: false });
+					this.modal.open();
+					setTimeout(async ()=>{
+						await this.modal.initFileView(file, undefined);
+					}, 20);
+				  })
+				  .setSection?.("open");
+			  });
+			}
+		  }),
+		);
+	  }
 }
 
 
@@ -398,9 +438,11 @@ class FloatSearchModal extends Modal {
 			await this.searchLeaf.view.setState(this.state, true);
 			this.state?.current ? (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0) : (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(this.state?.query?.length, this.state?.query?.length);
 		}, 0);
+
+
+		
 		
 		return;
-		
 	}
 
 	initInput() {
@@ -563,7 +605,7 @@ class FloatSearchModal extends Modal {
 				eState: state
 			});
 
-			if(this.fileState?.match?.matches[0] === state.match?.matches[0] && state && this.fileState) {
+			if(this.fileState?.match?.matches[0] === state?.match?.matches[0] && state && this.fileState) {
 				setTimeout(()=>{
 					if(this.fileLeaf) {
 						app.workspace.setActiveLeaf(this.fileLeaf, {
@@ -600,7 +642,7 @@ class FloatSearchModal extends Modal {
 			}
 		}
 
-
+		if(!this.fileEl) return;
 
 		const [createdLeaf, embeddedView] = spawnLeafView(this.plugin, this.fileEl);
 		this.fileLeaf = createdLeaf;
