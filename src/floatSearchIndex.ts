@@ -161,7 +161,7 @@ export default class FloatSearchPlugin extends Plugin {
 									1,
 								);
 							}
-							
+
 						}
 
 						const view = old.call(this, file, openState);
@@ -189,6 +189,39 @@ export default class FloatSearchPlugin extends Plugin {
 		);
 	}
 
+	private patchSearch() {
+		const patchSearchView = () => {
+			const leaf = app.workspace.getLeavesOfType("search").first();
+			const view = leaf?.view;
+
+			if (!view) return false;
+
+			const SearchView = view.constructor;
+			this.register(
+				around(SearchView.prototype, {
+					onOpen: (next) =>
+						function (...args: any) {
+							console.log(this);
+							return next.call(this, ...args);
+						},
+				})
+			);
+			console.log("Obsidian-Surfing: empty view patched");
+			return true;
+		};
+		this.app.workspace.onLayoutReady(() => {
+			if (!patchSearchView()) {
+				const evt = app.workspace.on("layout-change", () => {
+					patchSearchView() && app.workspace.offref(evt);
+				});
+				this.registerEvent(evt);
+			}
+		});
+
+		// Dirty workaround to prevent webview cause Obsidian crashed
+
+	}
+
 	registerObsidianURIHandler() {
 		this.registerObsidianProtocolHandler("fs", (path)=>{
 			this.modal = new FloatSearchModal((state)=>{
@@ -211,7 +244,7 @@ export default class FloatSearchPlugin extends Plugin {
 			}
 		});
 
-		
+
 		this.addCommand({
 			id: 'search-obsidian-globally-state',
 			name: 'Search Obsidian Globally (With Last State)',
@@ -224,26 +257,29 @@ export default class FloatSearchPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'search-in-current-file',
-			name: 'Search In Current File',
-			callback: () => {
+		    id: 'search-in-current-file',
+		    name: 'Search In Current File',
+		    checkCallback: (checking: boolean) => {
+		        // Conditions to check
 				const activeLeaf = this.app.workspace.activeLeaf;
 				if(!activeLeaf) return;
+
 				const viewType = activeLeaf.view.getViewType();
-				if(viewType !== "markdown" && viewType !== "canvas") {
-					new Notice("This command only works in markdown and canvas files.", 3000);
-					return;
-				}
+		        if (viewType === "markdown" || viewType === "canvas") {
+		            if (!checking) {
+						const currentFile = activeLeaf.view.file;
 
-				const currentFile = activeLeaf.view.file;
+						this.modal = new FloatSearchModal((state)=>{
+							this.state = state;
+							this.applySettingsUpdate();
+						},this.app, this, {...this.state, query: " path:" + currentFile.path, current: true });
+						this.modal.open();
+		            }
 
-				this.modal = new FloatSearchModal((state)=>{
-					this.state = state;
-					this.applySettingsUpdate();
-				},this.app, this, {...this.state, query: " path:" + currentFile.path, current: true });
-				this.modal.open();
-			}
-		})
+		            return true;
+		        }
+		    }
+		});
 	}
 
 	registerEditorMenuHandler() {
@@ -358,12 +394,9 @@ class FloatSearchModal extends Modal {
 		const navigateInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-navigate" });
 		const collapseInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-collapse" });
 		const enterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-enter" });
-		// const closeInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-close" });
-		// const ctrlEnterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-ctrl-enter" });
 		const altEnterInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-alt-enter" });
-		
+
 		const tabInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-tab" });
-		// const shiftTabInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-shift-tab" });
 		const switchInstructionsEl = instructionsEl.createDiv({ cls: "float-search-modal-instructions-switch" });
 
 		const navigateIconEl = navigateInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
@@ -381,30 +414,15 @@ class FloatSearchModal extends Modal {
 		enterIconEl.setText("↵");
 		enterTextEl.setText("Open in background");
 
-		// const ctrlEnterIconEl = ctrlEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
-		// const ctrlEnterTextEl = ctrlEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
-		// ctrlEnterIconEl.setText("Ctrl+↵");
-		// ctrlEnterTextEl.setText("New pane in background");
-
 		const altEnterIconEl = altEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
 		const altEnterTextEl = altEnterInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
 		altEnterIconEl.setText("Alt+↵");
 		altEnterTextEl.setText("Open File and Close");
 
-		// const closeIconEl = closeInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
-		// const closeTextEl = closeInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
-		// closeIconEl.setText("Esc");
-		// closeTextEl.setText("Close");
-
 		const tabIconEl = tabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
 		const tabTextEl = tabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
 		tabIconEl.setText("Tab/Shift+Tab");
 		tabTextEl.setText("Preview/Close Preview");
-
-		// const shiftTabIconEl = shiftTabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
-		// const shiftTabTextEl = shiftTabInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
-		// shiftTabIconEl.setText("Shift+Tab");
-		// shiftTabTextEl.setText("Close Preview");
 
 		const switchIconEl = switchInstructionsEl.createSpan({ cls: "float-search-modal-instructions-key" });
 		const switchTextEl = switchInstructionsEl.createSpan({ cls: "float-search-modal-instructions-text" });
@@ -439,9 +457,6 @@ class FloatSearchModal extends Modal {
 			this.state?.current ? (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0) : (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(this.state?.query?.length, this.state?.query?.length);
 		}, 0);
 
-
-		
-		
 		return;
 	}
 
@@ -542,7 +557,7 @@ class FloatSearchModal extends Modal {
 						const text = currentView.dom.focusedItem.el.innerText;
 						navigator.clipboard.writeText(text);
 					}
-				
+
 			}
 		}
 	}
@@ -583,7 +598,7 @@ class FloatSearchModal extends Modal {
 					const fileInnerEl = targetElement?.getElementsByClassName("tree-item-inner")[0] as HTMLElement;
 					const innerText = fileInnerEl.innerText;
 					const file = app.metadataCache.getFirstLinkpathDest(innerText, "");
-					
+
 					if(file) {
 						const item = currentView.dom.resultDomLookup.get(file);
 						currentView.dom.setFocusedItem(item);
@@ -592,7 +607,7 @@ class FloatSearchModal extends Modal {
 					}
 				}
 
-				
+
 				return;
 			}
 		}
@@ -619,7 +634,7 @@ class FloatSearchModal extends Modal {
 					(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
 				}, 0);
 			}
-			
+
 			return;
 		}
 
@@ -630,7 +645,7 @@ class FloatSearchModal extends Modal {
 			if(e.ctrlKey && e.key === "g") {
 				e.preventDefault();
 				e.stopPropagation();
-				
+
 				(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
 			}
 
@@ -656,6 +671,6 @@ class FloatSearchModal extends Modal {
 		this.fileState = state;
 
 		(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
-		
+
 	}
 }
