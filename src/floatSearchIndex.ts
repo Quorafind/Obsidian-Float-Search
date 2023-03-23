@@ -189,39 +189,6 @@ export default class FloatSearchPlugin extends Plugin {
 		);
 	}
 
-	private patchSearch() {
-		const patchSearchView = () => {
-			const leaf = app.workspace.getLeavesOfType("search").first();
-			const view = leaf?.view;
-
-			if (!view) return false;
-
-			const SearchView = view.constructor;
-			this.register(
-				around(SearchView.prototype, {
-					onOpen: (next) =>
-						function (...args: any) {
-							console.log(this);
-							return next.call(this, ...args);
-						},
-				})
-			);
-			console.log("Obsidian-Surfing: empty view patched");
-			return true;
-		};
-		this.app.workspace.onLayoutReady(() => {
-			if (!patchSearchView()) {
-				const evt = app.workspace.on("layout-change", () => {
-					patchSearchView() && app.workspace.offref(evt);
-				});
-				this.registerEvent(evt);
-			}
-		});
-
-		// Dirty workaround to prevent webview cause Obsidian crashed
-
-	}
-
 	registerObsidianURIHandler() {
 		this.registerObsidianProtocolHandler("fs", (path)=>{
 			this.modal = new FloatSearchModal((state)=>{
