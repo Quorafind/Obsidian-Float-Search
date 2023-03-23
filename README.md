@@ -2,6 +2,8 @@
 
 You can use search view in modal now.
 
+![float-search.png](media/img.png)
+
 - Set hotkey for open float search quickly.
 
 
