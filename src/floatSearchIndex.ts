@@ -258,11 +258,18 @@ export default class FloatSearchPlugin extends Plugin {
 				if (editor.getSelection().length === 0) {
 					return;
 				}
-				const selection = editor.getSelection();
+				const selection = editor.getSelection().trim();
+				let searchWord = selection;
+
+				if(selection.length > 8) {
+					searchWord = selection.substring(0, 3) + "..." + selection.substring(selection.length - 3, selection.length);
+				} else {
+					searchWord = selection;
+				}
 
 				menu.addItem((item) => {
 					// Add sub menu
-					item.setTitle('Search "' + selection + '"').setIcon("search")
+					item.setTitle('Search "' + searchWord + '"' + " in Float Search").setIcon("search")
 						.onClick(()=>{
 							this.modal = new FloatSearchModal((state)=>{
 								this.state = state;
