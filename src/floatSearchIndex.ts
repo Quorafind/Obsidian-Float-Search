@@ -223,6 +223,32 @@ export default class FloatSearchPlugin extends Plugin {
 			}
 		});
 
+
+		this.addCommand({
+		    id: 'search-in-backlink',
+		    name: 'Search In Backlink Of Current File',
+		    checkCallback: (checking: boolean) => {
+		        // Conditions to check
+				const activeLeaf = this.app.workspace.activeLeaf;
+				if(!activeLeaf) return;
+
+				const viewType = activeLeaf.view.getViewType();
+				if (viewType === "markdown" || viewType === "canvas") {
+					if (!checking) {
+						const currentFile = activeLeaf.view.file;
+
+						this.modal = new FloatSearchModal((state)=>{
+							this.state = state;
+							this.applySettingsUpdate();
+						},this.app, this, {...this.state, query: " /\\[\\[" + (currentFile.extension === "canvas" ? currentFile.name : currentFile.basename) + "(\\|[^\\]]*)?\\]\\]/", current: true });
+						this.modal.open();
+					}
+
+					return true;
+				}
+		    }
+		});
+
 		this.addCommand({
 		    id: 'search-in-current-file',
 		    name: 'Search In Current File',
@@ -331,12 +357,14 @@ class FloatSearchModal extends Modal {
 	private searchCtnEl: HTMLElement;
 	private instructionsEl: HTMLElement;
 	private fileEl: HTMLElement;
+	private viewType: string;
 
-	constructor(cb: (state: any)=> void, app: App, plugin: FloatSearchPlugin, state: any) {
+	constructor(cb: (state: any)=> void, app: App, plugin: FloatSearchPlugin, state: any, viewType: string = "search") {
 		super(app);
 		this.plugin = plugin;
 		this.cb = cb;
 		this.state = state;
+		this.viewType = viewType;
 	}
 
 	async onOpen() {
@@ -347,7 +375,7 @@ class FloatSearchModal extends Modal {
 
 		this.initInstructions(this.instructionsEl);
 		this.initCss(contentEl, modalEl, containerEl);
-		await this.initSearchView(this.searchCtnEl);
+		await this.initSearchView(this.searchCtnEl, this.viewType);
 		this.initInput();
 		this.initContent();
 	}
@@ -416,7 +444,7 @@ class FloatSearchModal extends Modal {
 		containerEl.classList.add("float-search-modal-container");
 	}
 
-	async initSearchView(contentEl: HTMLElement) {
+	async initSearchView(contentEl: HTMLElement, viewType: string) {
 		const [createdLeaf, embeddedView] = spawnLeafView(this.plugin, contentEl);
 		this.searchLeaf = createdLeaf;
 		this.searchEmbeddedView = embeddedView;
