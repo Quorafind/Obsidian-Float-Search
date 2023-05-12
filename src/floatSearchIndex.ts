@@ -468,7 +468,7 @@ class FloatSearchModal extends Modal {
 
 		setTimeout(async ()=>{
 			await this.searchLeaf.view.setState(this.state, true);
-			this.state?.current ? (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0) : (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(this.state?.query?.length, this.state?.query?.length);
+			this.state?.current ? (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0) : (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, this.state?.query?.length);
 		}, 0);
 
 		return;
