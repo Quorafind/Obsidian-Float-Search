@@ -7,6 +7,8 @@ on:
 env:
     PLUGIN_NAME: obsidian-float-search
 
+permissions: write-all
+
 jobs:
     build:
         runs-on: ubuntu-latest

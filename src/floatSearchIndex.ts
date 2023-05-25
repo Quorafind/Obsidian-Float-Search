@@ -1,10 +1,11 @@
 import {
+	apiVersion,
 	App,
 	Editor,
 	MarkdownView,
 	Menu,
 	Modal, Notice, OpenViewState,
-	Plugin, SearchView,
+	Plugin, requireApiVersion, SearchView,
 	TAbstractFile,
 	TFile,
 	Workspace,
@@ -588,6 +589,9 @@ class FloatSearchModal extends Modal {
 
 			if(e.altKey || !this.fileLeaf) {
 				while (targetElement) {
+					if (targetElement.classList.contains('tree-item-icon')) {
+						break;
+					}
 					if (targetElement.classList.contains('tree-item')) {
 						this.close();
 						break;
