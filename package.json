@@ -1,7 +1,7 @@
 {
 	"name": "float-search",
 	"version": "3.3.2",
-	"description": "You can use search view in modal now.",
+	"description": "You can use search view in modal/leaf/popout window now.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
