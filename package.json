@@ -1,6 +1,6 @@
 {
 	"name": "float-search",
-	"version": "3.3.1",
+	"version": "3.3.2",
 	"description": "You can use search view in modal now.",
 	"main": "main.js",
 	"scripts": {
