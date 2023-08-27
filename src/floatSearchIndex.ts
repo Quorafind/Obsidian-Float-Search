@@ -286,6 +286,18 @@ export default class FloatSearchPlugin extends Plugin {
 				});
 			}
 		});
+
+		this.addCommand({
+			id: 'open-search-view-window',
+			name: 'Open Search View Window',
+			callback: async () => {
+				const leaf = app.workspace.getLeaf('window');
+				leaf.setPinned(true);
+				await leaf.setViewState({
+					type: "search",
+				});
+			}
+		});
 	}
 
 	registerEditorMenuHandler() {
