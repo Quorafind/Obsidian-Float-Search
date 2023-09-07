@@ -1,10 +1,12 @@
 import {
-    Editor,
-    Menu,
-    Modal, OpenViewState,
-    Plugin, SearchView,
+    addIcon,
+    App,
+    Editor, ExtraButtonComponent,
+    Menu, MenuItem,
+    Modal, OpenViewState, PaneType,
+    Plugin, SearchView, setIcon,
     TAbstractFile,
-    TFile, ViewState,
+    TFile,
     Workspace,
     WorkspaceContainer, WorkspaceItem,
     WorkspaceLeaf
@@ -19,6 +21,13 @@ type sortOrder =
     | "byModifiedTimeReverse"
     | "byCreatedTime"
     | "byCreatedTimeReverse";
+
+type searchType = "modal" | "sidebar" | PaneType;
+
+interface viewType {
+    type: searchType;
+    icon: string;
+}
 
 interface searchState {
     collapseAll?: boolean;
@@ -44,6 +53,37 @@ const DEFAULT_SETTINGS: FloatSearchSettings = {
         query: "",
         sortOrder: "alphabetical",
     }
+}
+
+const allViews: viewType[] = [{
+    type: "modal",
+    icon: "square-equal"
+}, {
+    type: "sidebar",
+    icon: "panel-left-inactive"
+}, {
+    type: "split",
+    icon: "split-square-horizontal"
+}, {
+    type: "tab",
+    icon: "panel-top"
+}, {
+    type: "window",
+    icon: "app-window"
+}];
+
+const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', state?: searchState) => {
+    const leaf = type === 'sidebar' ? app.workspace.getLeftLeaf(false) : app.workspace.getLeaf(type);
+    leaf.setPinned(type !== 'sidebar');
+    await leaf.setViewState({
+        type: "search",
+        active: true,
+        state: state
+    });
+    setTimeout(() => {
+        const inputEl = leaf.containerEl.getElementsByTagName("input")[0];
+        inputEl.focus();
+    }, 0);
 }
 
 export default class FloatSearchPlugin extends Plugin {
@@ -75,9 +115,11 @@ export default class FloatSearchPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
         this.initState();
+        this.registerIcons();
 
         this.patchWorkspace();
         this.patchWorkspaceLeaf();
+        this.patchSearchView();
 
         this.registerObsidianURIHandler();
         this.registerObsidianCommands();
@@ -89,6 +131,14 @@ export default class FloatSearchPlugin extends Plugin {
 
     onunload() {
         this.state = undefined;
+        this.modal?.close();
+    }
+
+    registerIcons() {
+        addIcon('panel-left-inactive', `<path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 4.999687 3 L 19.000312 3 C 20.104688 3 21 3.895312 21 4.999687 L 21 19.000312 C 21 20.104688 20.104688 21 19.000312 21 L 4.999687 21 C 3.895312 21 3 20.104688 3 19.000312 L 3 4.999687 C 3 3.895312 3.895312 3 4.999687 3 Z M 4.999687 3 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 9 13.999688 L 9 15 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 9 19.000312 L 9 21 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 9 3 L 9 4.999687 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 9 9 L 9 10.000312 " transform="matrix(4.166667,0,0,4.166667,0,0)"/>`)
+        addIcon('app-window', `<path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 4.000312 4.000312 L 19.999688 4.000312 C 21.105 4.000312 22.000312 4.895625 22.000312 6 L 22.000312 18 C 22.000312 19.104375 21.105 19.999688 19.999688 19.999688 L 4.000312 19.999688 C 2.895 19.999688 1.999687 19.104375 1.999687 18 L 1.999687 6 C 1.999687 4.895625 2.895 4.000312 4.000312 4.000312 Z M 4.000312 4.000312 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 10.000312 4.000312 L 10.000312 7.999687 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 1.999687 7.999687 L 22.000312 7.999687 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 6 4.000312 L 6 7.999687 " transform="matrix(4.166667,0,0,4.166667,0,0)"/>`);
+        addIcon('panel-top', `<path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 4.999687 3 L 19.000312 3 C 20.104688 3 21 3.895312 21 4.999687 L 21 19.000312 C 21 20.104688 20.104688 21 19.000312 21 L 4.999687 21 C 3.895312 21 3 20.104688 3 19.000312 L 3 4.999687 C 3 3.895312 3.895312 3 4.999687 3 Z M 4.999687 3 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 3 9 L 21 9 " transform="matrix(4.166667,0,0,4.166667,0,0)"/>`);
+        addIcon('square-equal', `<path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 4.999687 3 L 19.000312 3 C 20.104688 3 21 3.895312 21 4.999687 L 21 19.000312 C 21 20.104688 20.104688 21 19.000312 21 L 4.999687 21 C 3.895312 21 3 20.104688 3 19.000312 L 3 4.999687 C 3 3.895312 3.895312 3 4.999687 3 Z M 4.999687 3 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 7.000312 10.000312 L 16.999688 10.000312 " transform="matrix(4.166667,0,0,4.166667,0,0)"/><path style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke:currentColor;stroke-opacity:1;stroke-miterlimit:4;" d="M 7.000312 13.999688 L 16.999688 13.999688 " transform="matrix(4.166667,0,0,4.166667,0,0)"/>`);
     }
 
     initState() {
@@ -112,7 +162,7 @@ export default class FloatSearchPlugin extends Plugin {
                 function (...args) {
                     const activeLeaf = this.activeLeaf;
                     if (activeLeaf) {
-                        const fsCtnEl = (activeLeaf.parent.containerEl as HTMLElement).parentElement;
+                        const fsCtnEl = (activeLeaf.parent?.containerEl as HTMLElement).parentElement;
                         if (fsCtnEl?.classList.contains("fs-content")) {
                             if (activeLeaf.view.getViewType() === "markdown") {
                                 return activeLeaf;
@@ -252,12 +302,144 @@ export default class FloatSearchPlugin extends Plugin {
         );
     }
 
+    patchSearchView() {
+        const updateCurrentState = (state: searchState) => {
+            this.state = state;
+            this.settings.searchViewState = state as searchState;
+            this.applySettingsUpdate();
+        }
+
+        const checkCurrentViewType = (leaf: WorkspaceLeaf) => {
+            const isModal = document.querySelector('.float-search-modal') !== null;
+            const currentLeafRoot = leaf.getRoot();
+            if (currentLeafRoot?.side && (currentLeafRoot?.side === "left" || currentLeafRoot?.side === 'right')) return "sidebar";
+            if (leaf.getContainer()?.type === "window") return "window";
+            return isModal ? "modal" : "split";
+        }
+
+        const initViewMenu = (menu: Menu, current: searchType, originLeaf?: WorkspaceLeaf) => {
+            menu.dom.toggleClass("float-search-view-menu", true);
+            let availableViews = allViews.filter((view) => {
+                if (current === "split") {
+                    return view.type !== "tab";
+                } else {
+                    return view.type !== current;
+                }
+            });
+            for (const view of availableViews) {
+                menu.addItem((item: MenuItem) => {
+                    item.setTitle(`${view.type} view`).setIcon(`${view.icon}`).onClick(async () => {
+                        if (view.type === "modal") {
+                            originLeaf?.detach();
+                            setTimeout(() => {
+                                this.initModal(this.state, true, false);
+                            }, 10);
+                        } else if (view.type === "sidebar") {
+                            await initSearchViewWithLeaf(this.app, view.type, this.state);
+                        } else {
+                            if (current === "window") {
+                                originLeaf?.detach();
+                                setTimeout(async () => {
+                                    await initSearchViewWithLeaf(this.app, <"tab" | "split">view.type, this.state);
+                                }, 10);
+                            } else {
+                                await initSearchViewWithLeaf(this.app, view.type, this.state);
+                            }
+
+                        }
+                        if (current === "modal") {
+                            this.modal.close();
+                        } else {
+                            originLeaf?.detach();
+                        }
+                    });
+                });
+            }
+            return menu;
+        }
+
+        const patchSearch = () => {
+            const searchView = this.app.workspace.getLeavesOfType("search")[0]?.view as any;
+
+            if (!searchView) return false;
+
+            const searchViewConstructor = searchView.constructor;
+
+            this.register(
+                around(searchViewConstructor.prototype, {
+                    onOpen(old) {
+                        return function () {
+                            old.call(this);
+                            const viewSwitchEl = createDiv({cls: "float-search-view-switch"});
+                            const targetEl = this.filterSectionToggleEl;
+                            const viewSwitchButton = new ExtraButtonComponent(viewSwitchEl);
+                            viewSwitchButton.setIcon('layout-template').setTooltip("Switch to File View");
+                            viewSwitchButton.onClick(() => {
+                                const currentType = checkCurrentViewType(this.leaf);
+                                const layoutMenu = initViewMenu(new Menu(), currentType, this.leaf);
+                                const viewSwitchButtonPos = viewSwitchEl.getBoundingClientRect();
+                                layoutMenu.showAtPosition({x: viewSwitchButtonPos.x, y: viewSwitchButtonPos.y + 30});
+                            });
+                            targetEl.parentElement.insertBefore(viewSwitchEl, targetEl);
+                        }
+                    },
+                    startSearch(old) {
+                        return function () {
+                            old.call(this);
+                            const viewState = this.getState();
+                            updateCurrentState({
+                                ...viewState,
+                                query: this.searchComponent.getValue(),
+                            });
+                        }
+                    }
+                })
+            );
+            searchView.leaf?.rebuildView();
+            console.log("Metadata-Style: all property view get patched");
+            return true;
+        };
+        this.app.workspace.onLayoutReady(() => {
+            if (!patchSearch()) {
+                const evt = this.app.workspace.on("layout-change", () => {
+                    patchSearch() && this.app.workspace.offref(evt);
+                });
+                this.registerEvent(evt);
+            }
+        });
+    }
+
     registerObsidianURIHandler() {
         this.registerObsidianProtocolHandler("fs", (path) => this.initModal({
             ...this.state,
             query: path.query,
             current: false
         }, true, true));
+    }
+
+    private createCommand(options: {
+        id: string;
+        name: string;
+        queryBuilder: (file: any) => string;
+    }): void {
+        this.addCommand({
+            id: options.id,
+            name: options.name,
+            checkCallback: (checking: boolean) => {
+                const activeLeaf = this.app.workspace.activeLeaf;
+                if (!activeLeaf) return;
+
+                const viewType = activeLeaf.view.getViewType();
+                if (viewType === "markdown" || viewType === "canvas") {
+                    if (!checking) {
+                        const currentFile = activeLeaf.view.file;
+                        const query = options.queryBuilder(currentFile);
+                        this.initModal({...this.state, query, current: true}, true, false);
+                    }
+                    return true;
+                }
+            }
+        });
     }
 
     registerObsidianCommands() {
@@ -275,75 +457,29 @@ export default class FloatSearchPlugin extends Plugin {
         });
 
 
-        this.addCommand({
+        this.createCommand({
             id: 'search-in-backlink',
             name: 'Search In Backlink Of Current File',
-            checkCallback: (checking: boolean) => {
-                // Conditions to check
-                const activeLeaf = this.app.workspace.activeLeaf;
-                if (!activeLeaf) return;
-
-                const viewType = activeLeaf.view.getViewType();
-                if (viewType === "markdown" || viewType === "canvas") {
-                    if (!checking) {
-                        const currentFile = activeLeaf.view.file;
-
-                        this.initModal({
-                            ...this.state,
-                            query: " /\\[\\[" + (currentFile.extension === "canvas" ? currentFile.name : currentFile.basename) + "(\\|[^\\]]*)?\\]\\]/",
-                            current: true
-                        }, true, false);
-                    }
-
-                    return true;
-                }
+            queryBuilder: (file) => {
+                return " /\\[\\[" + (file.extension === "canvas" ? file.name : file.basename) + "(\\|[^\\]]*)?\\]\\]/";
             }
         });
 
-        this.addCommand({
+        this.createCommand({
             id: 'search-in-current-file',
             name: 'Search In Current File',
-            checkCallback: (checking: boolean) => {
-                // Conditions to check
-                const activeLeaf = this.app.workspace.activeLeaf;
-                if (!activeLeaf) return;
-
-                const viewType = activeLeaf.view.getViewType();
-                if (viewType === "markdown" || viewType === "canvas") {
-                    if (!checking) {
-                        const currentFile = activeLeaf.view.file;
-
-                        this.initModal({...this.state, query: " path:" + `"${currentFile.path}"`, current: true}, true, false);
-                    }
-
-                    return true;
-                }
+            queryBuilder: (file) => {
+                return " path:" + `"${file.path}"`;
             }
         });
 
-        this.addCommand({
-            id: 'open-search-view',
-            name: 'Open Search View',
-            callback: async () => {
-                const leaf = this.app.workspace.getLeaf();
-                leaf.setPinned(true);
-                await leaf.setViewState({
-                    type: "search",
-                });
-            }
-        });
-
-        this.addCommand({
-            id: 'open-search-view-window',
-            name: 'Open Search View Window',
-            callback: async () => {
-                const leaf = this.app.workspace.getLeaf('window');
-                leaf.setPinned(true);
-                await leaf.setViewState({
-                    type: "search",
-                });
-            }
-        });
+        for (const type of ['split', 'tab', 'window'] as PaneType[]) {
+            this.addCommand({
+                id: `open-search-view-${type}`,
+                name: `Open Search View (${type})`,
+                callback: async () => initSearchViewWithLeaf(this.app, type)
+            });
+        }
     }
 
     registerEditorMenuHandler() {
