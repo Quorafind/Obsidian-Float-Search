@@ -4,7 +4,7 @@ import {
 	Modal, OpenViewState,
 	Plugin, SearchView,
 	TAbstractFile,
-	TFile,
+	TFile, ViewState,
 	Workspace,
 	WorkspaceContainer, WorkspaceItem,
 	WorkspaceLeaf
@@ -164,6 +164,15 @@ export default class FloatSearchPlugin extends Plugin {
 				return function (event: MouseEvent, leaf: WorkspaceLeaf) {
 					return old.call(this, event, leaf);
 				};
+			},
+			pushUndoHistory(old: any) {
+				return function (leaf: WorkspaceLeaf, id: string, ...args: any[]) {
+					const viewState = leaf.getViewState();
+					if (viewState.type === "search") {
+						return;
+					}
+					return old.call(this, leaf, id, ...args);
+				};
 			}
 		});
 		this.register(uninstaller);
@@ -238,7 +247,18 @@ export default class FloatSearchPlugin extends Plugin {
 
 						return view;
 					}
-				}
+				},
+				// setViewState(old) {
+				// 	return function (viewState: ViewState, eState?: any) {
+				// 		const result = old.call(this, viewState, eState);
+				// 		console.log(viewState);
+				// 		if (isEmebeddedLeaf(this)) {
+				// 			console.log("hello", viewState);
+				// 			console.log(this.app.undoHistory);
+				// 		}
+				// 		return result;
+				// 	}
+				// }
 			}),
 		);
 	}
@@ -610,7 +630,7 @@ class FloatSearchModal extends Modal {
 				case "g":
 					if (this.fileLeaf && e.ctrlKey) {
 						e.preventDefault();
-						app.workspace.setActiveLeaf(this.fileLeaf, {
+						this.plugin.app.workspace.setActiveLeaf(this.fileLeaf, {
 							focus: true,
 						});
 					}
