@@ -1,6 +1,6 @@
 {
 	"name": "float-search",
-	"version": "3.3.2",
+	"version": "3.3.3",
 	"description": "You can use search view in modal/leaf/popout window now.",
 	"main": "main.js",
 	"scripts": {
