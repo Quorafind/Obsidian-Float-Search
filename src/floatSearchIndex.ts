@@ -161,9 +161,9 @@ export default class FloatSearchPlugin extends Plugin {
             getLeaf: (next) =>
                 function (...args) {
                     const activeLeaf = this.activeLeaf;
-                    if (activeLeaf) {
+                    if (activeLeaf && !activeLeaf.pinned) {
                         const fsCtnEl = (activeLeaf.parent?.containerEl as HTMLElement).parentElement;
-                        if (fsCtnEl?.classList.contains("fs-content")) {
+                        if (fsCtnEl?.hasClass("fs-content")) {
                             if (activeLeaf.view.getViewType() === "markdown") {
                                 return activeLeaf;
                             }
@@ -172,7 +172,7 @@ export default class FloatSearchPlugin extends Plugin {
                                 this.setActiveLeaf(newLeaf);
                             }
                         }
-                        return next.call(this, ...args);
+                        return next.call(this);
                     }
                     return next.call(this, ...args);
                 },
@@ -810,7 +810,7 @@ class FloatSearchModal extends Modal {
 
                     const fileInnerEl = targetElement?.getElementsByClassName("tree-item-inner")[0] as HTMLElement;
                     const innerText = fileInnerEl.innerText;
-                    const file = app.metadataCache.getFirstLinkpathDest(innerText, "");
+                    const file = this.plugin.app.metadataCache.getFirstLinkpathDest(innerText, "");
 
                     if (file) {
                         const item = currentView.dom.resultDomLookup.get(file);
