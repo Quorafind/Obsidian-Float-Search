@@ -174,6 +174,10 @@ declare module "obsidian" {
         };
     }
 
+    interface WorkspaceItem {
+        side?: "left" | "right";
+    }
+
     interface View {
         iconEl: HTMLElement;
         file: TFile;
@@ -248,6 +252,10 @@ declare module "obsidian" {
 
     interface HoverParent {
         type?: string;
+    }
+
+    interface WorkspaceContainer {
+        type: "window" | "split" | "tab";
     }
 
     interface HoverPopover {
