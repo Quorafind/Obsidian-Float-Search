@@ -162,7 +162,7 @@ export default class FloatSearchPlugin extends Plugin {
                 function (...args) {
                     const activeLeaf = this.activeLeaf;
                     if (activeLeaf) {
-                        const fsCtnEl = (activeLeaf.parent?.containerEl as HTMLElement).parentElement;
+                        const fsCtnEl = (activeLeaf.parent.containerEl as HTMLElement).parentElement;
                         if (fsCtnEl?.hasClass("fs-content")) {
                             if (activeLeaf.view.getViewType() === "markdown") {
                                 return activeLeaf;
@@ -172,7 +172,7 @@ export default class FloatSearchPlugin extends Plugin {
                                 this.setActiveLeaf(newLeaf);
                             }
                         }
-                        return next.call(this);
+                        return next.call(this, ...args);
                     }
                     return next.call(this, ...args);
                 },
