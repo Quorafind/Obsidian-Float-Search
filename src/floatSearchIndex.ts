@@ -6,7 +6,7 @@ import {
 	Modal, OpenViewState, PaneType,
 	Plugin, SearchView, setIcon,
 	TAbstractFile,
-	TFile,
+	TFile, ViewStateResult,
 	Workspace,
 	WorkspaceContainer, WorkspaceItem,
 	WorkspaceLeaf
@@ -660,7 +660,7 @@ class FloatSearchModal extends Modal {
 		});
 
 		setTimeout(async () => {
-			await this.searchLeaf.view.setState(this.state, true);
+			await this.searchLeaf.view.setState(this.state, true as ViewStateResult);
 			this.state?.current ? (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, 0) : (this.searchLeaf.view as SearchView).searchComponent.inputEl.setSelectionRange(0, this.state?.query?.length);
 		}, 0);
 
