@@ -415,7 +415,7 @@ export default class FloatSearchPlugin extends Plugin {
 			...this.state,
 			query: path.query,
 			current: false
-		}, true, true));
+		}, true, false));
 	}
 
 	private createCommand(options: {
