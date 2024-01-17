@@ -811,10 +811,14 @@ class FloatSearchModal extends Modal {
 					if (targetElement.classList.contains('tree-item-icon')) {
 						break;
 					}
+					if (targetElement.classList.contains('search-result-hover-button')) {
+						break;
+					}
 					if (targetElement.classList.contains('tree-item')) {
 						this.close();
 						break;
 					}
+
 					targetElement = targetElement.parentElement;
 				}
 				return;
