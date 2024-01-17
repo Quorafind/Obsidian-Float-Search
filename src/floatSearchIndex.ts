@@ -81,6 +81,8 @@ const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', stat
 		state: state
 	});
 
+	console.log(leaf.view);
+
 	setTimeout(() => {
 		const inputEl = leaf.containerEl.getElementsByTagName("input")[0];
 		inputEl.focus();
@@ -371,6 +373,10 @@ export default class FloatSearchPlugin extends Plugin {
 					onOpen(old) {
 						return function () {
 							old.call(this);
+							(this.scope as Scope).register(['Mod'], 'w', () => {
+								this.leaf?.detach();
+							});
+
 							const viewSwitchEl = createDiv({cls: "float-search-view-switch"});
 							const targetEl = this.filterSectionToggleEl;
 							const viewSwitchButton = new ExtraButtonComponent(viewSwitchEl);
@@ -482,6 +488,7 @@ export default class FloatSearchPlugin extends Plugin {
 					const existingLeaf = this.app.workspace.getLeavesOfType("search");
 					switch (type) {
 						case "window":
+							// @ts-ignore
 							const isExistingWindowLeaf = existingLeaf.find((leaf) => leaf.parentSplit.parent.type === "window");
 							if (isExistingWindowLeaf) {
 								this.app.workspace.revealLeaf(isExistingWindowLeaf);
@@ -491,7 +498,9 @@ export default class FloatSearchPlugin extends Plugin {
 							break;
 						case "tab":
 						case "split":
+							// @ts-ignore
 							const isExistingLeaf = existingLeaf.find((leaf) => !leaf.parentSplit.parent.side);
+							console.log(isExistingLeaf);
 							if (isExistingLeaf) {
 								this.app.workspace.revealLeaf(isExistingLeaf);
 								return;
