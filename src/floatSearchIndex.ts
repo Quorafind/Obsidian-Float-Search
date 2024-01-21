@@ -81,8 +81,6 @@ const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', stat
 		state: state
 	});
 
-	console.log(leaf.view);
-
 	setTimeout(() => {
 		const inputEl = leaf.containerEl.getElementsByTagName("input")[0];
 		inputEl.focus();
@@ -503,6 +501,11 @@ export default class FloatSearchPlugin extends Plugin {
 							console.log(isExistingLeaf);
 							if (isExistingLeaf) {
 								this.app.workspace.revealLeaf(isExistingLeaf);
+								isExistingLeaf.setViewState({
+									type: "search",
+									active: true,
+									state: this.state
+								});
 								return;
 							}
 							await initSearchViewWithLeaf(this.app, type);
