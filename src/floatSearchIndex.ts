@@ -1,14 +1,22 @@
 import {
 	addIcon,
 	App,
-	Editor, ExtraButtonComponent,
-	Menu, MenuItem,
-	Modal, OpenViewState, PaneType,
-	Plugin, Scope, SearchView, setIcon,
+	debounce,
+	Editor,
+	ExtraButtonComponent,
+	Menu,
+	MenuItem,
+	Modal,
+	OpenViewState,
+	PaneType,
+	Plugin,
+	Scope,
+	SearchView,
 	TAbstractFile,
-	TFile, ViewStateResult,
+	TFile,
 	Workspace,
-	WorkspaceContainer, WorkspaceItem,
+	WorkspaceContainer,
+	WorkspaceItem,
 	WorkspaceLeaf
 } from 'obsidian';
 import { EmbeddedView, isEmebeddedLeaf, spawnLeafView } from "./leafView";
@@ -92,35 +100,27 @@ export default class FloatSearchPlugin extends Plugin {
 	private state: any;
 	private modal: FloatSearchModal;
 
-	private applyStateDebounceTimer = 0;
-	private applySettingsDebounceTimer = 0;
+	public applySettingsUpdate = debounce(async () => {
+		await this.saveSettings();
+	}, 1000);
 
-
-	public applySettingsUpdate() {
-		clearTimeout(this.applySettingsDebounceTimer);
-		this.applySettingsDebounceTimer = window.setTimeout(async () => {
-			await this.saveSettings();
-		}, 1000);
-	}
-
-	private applyStateUpdate() {
-		this.applyStateDebounceTimer = window.setTimeout(() => {
-			clearTimeout(this.applyStateDebounceTimer);
-			this.state = {
-				...this.state,
-				query: "",
-			};
-		}, 30000);
-	}
+	private applyStateUpdate = debounce(() => {
+		this.state = {
+			...this.state,
+			query: "",
+		};
+	}, 30000);
 
 	async onload() {
 		await this.loadSettings();
 		this.initState();
 		this.registerIcons();
 
-		this.patchWorkspace();
-		this.patchWorkspaceLeaf();
-		this.patchSearchView();
+		this.app.workspace.onLayoutReady(() => {
+			this.patchWorkspace();
+			this.patchWorkspaceLeaf();
+			this.patchSearchView();
+		});
 
 		this.registerObsidianURIHandler();
 		this.registerObsidianCommands();
@@ -158,6 +158,7 @@ export default class FloatSearchPlugin extends Plugin {
 
 	patchWorkspace() {
 		let layoutChanging = false;
+		const self = this;
 		const uninstaller = around(Workspace.prototype, {
 			getLeaf: (next) =>
 				function (...args) {
@@ -168,7 +169,7 @@ export default class FloatSearchPlugin extends Plugin {
 							if (activeLeaf.view.getViewType() === "markdown") {
 								return activeLeaf;
 							}
-							const newLeaf = app.workspace.getUnpinnedLeaf();
+							const newLeaf = self.app.workspace.getUnpinnedLeaf();
 							if (newLeaf) {
 								this.setActiveLeaf(newLeaf);
 							}
@@ -202,7 +203,7 @@ export default class FloatSearchPlugin extends Plugin {
 					if (layoutChanging) return false;  // Don't let HEs close during workspace change
 
 					// 0.14.x doesn't have WorkspaceContainer; this can just be an instanceof check once 15.x is mandatory:
-					if (parent === app.workspace.rootSplit || (WorkspaceContainer && parent instanceof WorkspaceContainer)) {
+					if (parent === self.app.workspace.rootSplit || (WorkspaceContainer && parent instanceof WorkspaceContainer)) {
 						for (const popover of EmbeddedView.popoversForWindow((parent as WorkspaceContainer).win)) {
 							// Use old API here for compat w/0.14.x
 							if (old.call(this, cb, popover.rootSplit)) return true;
@@ -306,6 +307,7 @@ export default class FloatSearchPlugin extends Plugin {
 	patchSearchView() {
 		const updateCurrentState = (state: searchState) => {
 			this.state = state;
+			console.log(state);
 			this.settings.searchViewState = state as searchState;
 			this.applySettingsUpdate();
 		};
@@ -361,6 +363,7 @@ export default class FloatSearchPlugin extends Plugin {
 
 		const patchSearch = () => {
 			const searchView = this.app.workspace.getLeavesOfType("search")[0]?.view as any;
+			const self = this;
 
 			if (!searchView) return false;
 
@@ -388,14 +391,15 @@ export default class FloatSearchPlugin extends Plugin {
 							targetEl.parentElement.insertBefore(viewSwitchEl, targetEl);
 						};
 					},
-					startSearch(old) {
-						return function () {
-							old.call(this);
-							const viewState = this.getState();
-							updateCurrentState({
-								...viewState,
-								query: this.searchComponent.getValue(),
-							});
+					setState(old) {
+						return async function (state: any, result: any) {
+							old.call(this, state, result);
+							if (self.app.workspace.layoutReady) {
+								updateCurrentState({
+									...state,
+									query: this.searchComponent.getValue(),
+								});
+							}
 						};
 					}
 				})
