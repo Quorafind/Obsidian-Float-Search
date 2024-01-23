@@ -162,8 +162,9 @@ export default class FloatSearchPlugin extends Plugin {
 		const uninstaller = around(Workspace.prototype, {
 			getLeaf: (next) =>
 				function (...args) {
-					const activeLeaf = this.activeLeaf;
+					const activeLeaf = (this as Workspace).activeLeaf;
 					if (activeLeaf) {
+						// @ts-ignore
 						const fsCtnEl = (activeLeaf.parent.containerEl as HTMLElement).parentElement;
 						if (fsCtnEl?.hasClass("fs-content")) {
 							if (activeLeaf.view.getViewType() === "markdown") {
