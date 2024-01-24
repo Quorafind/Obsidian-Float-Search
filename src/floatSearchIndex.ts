@@ -768,9 +768,9 @@ class FloatSearchModal extends Modal {
 					currentView.onKeyArrowRightInFocus(e);
 					break;
 				case "Enter":
-					if (Keymap.isModifier(e, 'Mod') && !this.focusdItem) {
+					if (Keymap.isModifier(e, 'Mod') && Keymap.isModifier(e, 'Shift') && !this.focusdItem) {
 						e.preventDefault();
-						const fileName = inputEl.value;
+						const fileName = inputEl.value.trim();
 						const real = fileName.replace(/[/\\?%*:|"<>]/g, '-');
 						this.plugin.app.workspace.openLinkText(real, "", true);
 						this.close();
