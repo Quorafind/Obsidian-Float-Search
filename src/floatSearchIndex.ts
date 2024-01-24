@@ -3,7 +3,7 @@ import {
 	App,
 	debounce,
 	Editor,
-	ExtraButtonComponent,
+	ExtraButtonComponent, Keymap,
 	Menu,
 	MenuItem,
 	Modal,
@@ -610,6 +610,8 @@ class FloatSearchModal extends Modal {
 	private fileEl: HTMLElement;
 	private viewType: string;
 
+	private focusdItem: any;
+
 	constructor(cb: (state: any) => void, plugin: FloatSearchPlugin, state: any, viewType: string = "search") {
 		super(plugin.app);
 		this.plugin = plugin;
@@ -672,6 +674,11 @@ class FloatSearchModal extends Modal {
 		altEnterIconEl.setText("Alt+↵");
 		altEnterTextEl.setText("Open File and Close");
 
+		const ctrlEnterIconEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
+		const ctrlEnterTextEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
+		altEnterIconEl.setText("Ctrl+↵");
+		altEnterTextEl.setText("Create File When Not Exist");
+
 		const tabIconEl = tabInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
 		const tabTextEl = tabInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
 		tabIconEl.setText("Tab/Shift+Tab");
@@ -728,10 +735,12 @@ class FloatSearchModal extends Modal {
 							if (currentView.dom.focusedItem.collapsible) {
 								currentView.dom.focusedItem.setCollapse(false);
 							}
+							this.focusdItem = currentView.dom.focusedItem;
 						}
 						break;
 					} else {
 						currentView.onKeyArrowDownInFocus(e);
+						this.focusdItem = currentView.dom.focusedItem;
 						break;
 					}
 				case "ArrowUp":
@@ -741,10 +750,15 @@ class FloatSearchModal extends Modal {
 							if (currentView.dom.focusedItem.collapseEl) {
 								currentView.dom.focusedItem.setCollapse(true);
 							}
+							this.focusdItem = currentView.dom.focusedItem;
 						}
 						break;
 					} else {
 						currentView.onKeyArrowUpInFocus(e);
+						this.focusdItem = currentView.dom.focusedItem;
+						if (!currentView.dom.focusedItem.content) {
+							this.focusdItem = undefined;
+						}
 						break;
 					}
 				case "ArrowLeft":
@@ -754,6 +768,14 @@ class FloatSearchModal extends Modal {
 					currentView.onKeyArrowRightInFocus(e);
 					break;
 				case "Enter":
+					if (Keymap.isModifier(e, 'Mod') && !this.focusdItem) {
+						e.preventDefault();
+						const fileName = inputEl.value;
+						const real = fileName.replace(/[/\\?%*:|"<>]/g, '-');
+						this.plugin.app.workspace.openLinkText(real, "", true);
+						this.close();
+						break;
+					}
 					currentView.onKeyEnterInFocus(e);
 					if (e.altKey && currentView.dom.focusedItem) {
 						this.close();
@@ -815,7 +837,6 @@ class FloatSearchModal extends Modal {
 						navigator.clipboard.writeText(text);
 					}
 					break;
-
 			}
 		};
 	}
