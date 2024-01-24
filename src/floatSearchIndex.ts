@@ -170,7 +170,8 @@ export default class FloatSearchPlugin extends Plugin {
 							if (activeLeaf.view.getViewType() === "markdown") {
 								return activeLeaf;
 							}
-							const newLeaf = self.app.workspace.getUnpinnedLeaf();
+
+							const newLeaf = self.app.workspace.getMostRecentLeaf();
 							if (newLeaf) {
 								this.setActiveLeaf(newLeaf);
 							}
@@ -207,10 +208,19 @@ export default class FloatSearchPlugin extends Plugin {
 					if (parent === self.app.workspace.rootSplit || (WorkspaceContainer && parent instanceof WorkspaceContainer)) {
 						for (const popover of EmbeddedView.popoversForWindow((parent as WorkspaceContainer).win)) {
 							// Use old API here for compat w/0.14.x
-							if (old.call(this, cb, popover.rootSplit)) return true;
+							if (old.call(this, cb, popover.rootSplit)) return false;
 						}
 					}
 					return false;
+				};
+			},
+			setActiveLeaf(old) {
+				return function (leaf: any, params?: any) {
+					if (isEmebeddedLeaf(leaf)) {
+						old.call(this, leaf, params);
+						leaf.activeTime = 1700000000000;
+					}
+					return old.call(this, leaf, params);
 				};
 			},
 			onDragLeaf(old) {
@@ -308,7 +318,6 @@ export default class FloatSearchPlugin extends Plugin {
 	patchSearchView() {
 		const updateCurrentState = (state: searchState) => {
 			this.state = state;
-			console.log(state);
 			this.settings.searchViewState = state as searchState;
 			this.applySettingsUpdate();
 		};
@@ -406,7 +415,6 @@ export default class FloatSearchPlugin extends Plugin {
 				})
 			);
 			searchView.leaf?.rebuildView();
-			console.log("Metadata-Style: all property view get patched");
 			return true;
 		};
 		this.app.workspace.onLayoutReady(() => {
@@ -503,7 +511,6 @@ export default class FloatSearchPlugin extends Plugin {
 						case "split":
 							// @ts-ignore
 							const isExistingLeaf = existingLeaf.find((leaf) => !leaf.parentSplit.parent.side);
-							console.log(isExistingLeaf);
 							if (isExistingLeaf) {
 								this.app.workspace.revealLeaf(isExistingLeaf);
 								isExistingLeaf.setViewState({
