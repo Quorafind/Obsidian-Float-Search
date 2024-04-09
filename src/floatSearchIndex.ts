@@ -84,15 +84,15 @@ const allViews: viewType[] = [{
 
 const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', state?: searchState) => {
 	const leaf = type === 'sidebar' ? app.workspace.getLeftLeaf(false) : app.workspace.getLeaf(type);
-	leaf.setPinned(type !== 'sidebar');
-	await leaf.setViewState({
+	leaf?.setPinned(type !== 'sidebar');
+	await leaf?.setViewState({
 		type: "search",
 		active: true,
 		state: state
 	});
 
 	setTimeout(() => {
-		const inputEl = leaf.containerEl.getElementsByTagName("input")[0];
+		const inputEl = leaf.containerEl.getElementsByTagName("input")?.[0];
 		inputEl.focus();
 	}, 0);
 };
