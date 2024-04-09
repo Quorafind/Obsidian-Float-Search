@@ -433,16 +433,6 @@ export default class FloatSearchPlugin extends Plugin {
 							}
 						};
 					},
-					startSearch(old) {
-						return function () {
-							old.call(this);
-							const viewState = this.getState();
-							updateCurrentState({
-								...viewState,
-								query: this.searchComponent.getValue(),
-							});
-						};
-					},
 					setState(old) {
 						return async function (state: any, result: any) {
 							old.call(this, state, result);
