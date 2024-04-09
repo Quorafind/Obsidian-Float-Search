@@ -92,7 +92,7 @@ const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', stat
 	});
 
 	setTimeout(() => {
-		const inputEl = leaf.containerEl.getElementsByTagName("input")?.[0];
+		const inputEl = leaf?.containerEl.getElementsByTagName("input")?.[0];
 		inputEl.focus();
 	}, 0);
 };
