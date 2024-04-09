@@ -1,18 +1,26 @@
 import {
 	addIcon,
 	App,
-	Editor, ExtraButtonComponent,
-	Menu, MenuItem,
-	Modal, OpenViewState, PaneType,
-	Plugin, SearchView, setIcon, Setting,
+	Editor,
+	ExtraButtonComponent, Keymap,
+	Menu,
+	MenuItem,
+	Modal,
+	OpenViewState,
+	PaneType,
+	Plugin,
+	Scope,
+	SearchView, setIcon, Setting,
 	TAbstractFile,
-	TFile, ViewStateResult,
+	TFile,
 	Workspace,
-	WorkspaceContainer, WorkspaceItem,
+	WorkspaceContainer,
+	WorkspaceItem,
 	WorkspaceLeaf
 } from 'obsidian';
 import { EmbeddedView, isEmebeddedLeaf, spawnLeafView } from "./leafView";
 import { around } from "monkey-around";
+import { debounce } from "obsidian";
 
 type sortOrder =
 	"alphabetical"
@@ -82,6 +90,7 @@ const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', stat
 		active: true,
 		state: state
 	});
+
 	setTimeout(() => {
 		const inputEl = leaf.containerEl.getElementsByTagName("input")[0];
 		inputEl.focus();
@@ -93,38 +102,30 @@ export default class FloatSearchPlugin extends Plugin {
 	private state: any;
 	private modal: FloatSearchModal;
 
-	private applyStateDebounceTimer = 0;
-	private applySettingsDebounceTimer = 0;
-
 	patchedDomChildren = false;
 
+	public applySettingsUpdate = debounce(async () => {
+		await this.saveSettings();
+	}, 1000);
 
-	public applySettingsUpdate() {
-		clearTimeout(this.applySettingsDebounceTimer);
-		this.applySettingsDebounceTimer = window.setTimeout(async () => {
-			await this.saveSettings();
-		}, 1000);
-	}
-
-	private applyStateUpdate() {
-		this.applyStateDebounceTimer = window.setTimeout(() => {
-			clearTimeout(this.applyStateDebounceTimer);
-			this.state = {
-				...this.state,
-				query: "",
-			};
-		}, 30000);
-	}
+	private applyStateUpdate = debounce(() => {
+		this.state = {
+			...this.state,
+			query: "",
+		};
+	}, 30000);
 
 	async onload() {
 		await this.loadSettings();
 		this.initState();
 		this.registerIcons();
 
-		this.patchWorkspace();
-		this.patchWorkspaceLeaf();
-		this.patchSearchView();
-		this.patchVchildren();
+		this.app.workspace.onLayoutReady(() => {
+			this.patchWorkspace();
+			this.patchWorkspaceLeaf();
+			this.patchSearchView();
+			this.patchVchildren();
+		});
 
 		this.registerObsidianURIHandler();
 		this.registerObsidianCommands();
@@ -175,17 +176,21 @@ export default class FloatSearchPlugin extends Plugin {
 
 	patchWorkspace() {
 		let layoutChanging = false;
+		const self = this;
 		const uninstaller = around(Workspace.prototype, {
 			getLeaf: (next) =>
 				function (...args) {
-					const activeLeaf = this.activeLeaf;
+					const activeLeaf = (this as Workspace).activeLeaf;
 					if (activeLeaf) {
+						// @ts-ignore
 						const fsCtnEl = (activeLeaf.parent.containerEl as HTMLElement).parentElement;
 						if (fsCtnEl?.hasClass("fs-content")) {
 							if (activeLeaf.view.getViewType() === "markdown") {
 								return activeLeaf;
 							}
-							const newLeaf = app.workspace.getUnpinnedLeaf();
+
+							const newLeaf = self.app.workspace.getMostRecentLeaf();
+
 							if (newLeaf) {
 								this.setActiveLeaf(newLeaf);
 							}
@@ -219,13 +224,24 @@ export default class FloatSearchPlugin extends Plugin {
 					if (layoutChanging) return false;  // Don't let HEs close during workspace change
 
 					// 0.14.x doesn't have WorkspaceContainer; this can just be an instanceof check once 15.x is mandatory:
-					if (parent === app.workspace.rootSplit || (WorkspaceContainer && parent instanceof WorkspaceContainer)) {
+
+					if (parent === self.app.workspace.rootSplit || (WorkspaceContainer && parent instanceof WorkspaceContainer)) {
 						for (const popover of EmbeddedView.popoversForWindow((parent as WorkspaceContainer).win)) {
 							// Use old API here for compat w/0.14.x
-							if (old.call(this, cb, popover.rootSplit)) return true;
+							if (old.call(this, cb, popover.rootSplit)) return false;
+
 						}
 					}
 					return false;
+				};
+			},
+			setActiveLeaf(old) {
+				return function (leaf: any, params?: any) {
+					if (isEmebeddedLeaf(leaf)) {
+						old.call(this, leaf, params);
+						leaf.activeTime = 1700000000000;
+					}
+					return old.call(this, leaf, params);
 				};
 			},
 			onDragLeaf(old) {
@@ -378,17 +394,22 @@ export default class FloatSearchPlugin extends Plugin {
 
 		const patchSearch = () => {
 			const searchView = this.app.workspace.getLeavesOfType("search")[0]?.view as any;
+			const self = this;
 
 			if (!searchView) return false;
 
 			const searchViewConstructor = searchView.constructor;
-			const self = this;
 
 			this.register(
 				around(searchViewConstructor.prototype, {
 					onOpen(old) {
 						return function () {
 							old.call(this);
+
+							(this.scope as Scope).register(['Mod'], 'w', () => {
+								this.leaf?.detach();
+							});
+
 							const viewSwitchEl = createDiv({cls: "float-search-view-switch"});
 							const targetEl = this.filterSectionToggleEl;
 							const viewSwitchButton = new ExtraButtonComponent(viewSwitchEl);
@@ -400,7 +421,6 @@ export default class FloatSearchPlugin extends Plugin {
 								layoutMenu.showAtPosition({x: viewSwitchButtonPos.x, y: viewSwitchButtonPos.y + 30});
 							});
 							targetEl.parentElement.insertBefore(viewSwitchEl, targetEl);
-
 							if (!this.hidePathToggle) {
 								this.hidePathToggle = new Setting(this.searchParamsContainerEl).setName('Show file path').addToggle((toggle) => {
 									toggle.toggleEl.toggleClass('mod-small', true);
@@ -422,11 +442,21 @@ export default class FloatSearchPlugin extends Plugin {
 								query: this.searchComponent.getValue(),
 							});
 						};
+					},
+					setState(old) {
+						return async function (state: any, result: any) {
+							old.call(this, state, result);
+							if (self.app.workspace.layoutReady) {
+								updateCurrentState({
+									...state,
+									query: this.searchComponent.getValue(),
+								});
+							}
+						};
 					}
 				})
 			);
 			searchView.leaf?.rebuildView();
-			console.log("Metadata-Style: all property view get patched");
 			return true;
 		};
 		this.app.workspace.onLayoutReady(() => {
@@ -490,7 +520,7 @@ export default class FloatSearchPlugin extends Plugin {
 			...this.state,
 			query: path.query,
 			current: false
-		}, true, true));
+		}, true, false));
 	}
 
 	private createCommand(options: {
@@ -537,8 +567,8 @@ export default class FloatSearchPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'search-obsidian-globally-state',
-			name: 'Search obsidian globally (with last state)',
-			callback: () => this.initModal({...this.state, query: "", current: false}, true, false)
+			name: 'Search Obsidian Globally (With Last State)',
+			callback: () => this.initModal({...this.state, query: this.state.query, current: false}, true, false)
 		});
 
 
@@ -562,7 +592,35 @@ export default class FloatSearchPlugin extends Plugin {
 			this.addCommand({
 				id: `open-search-view-${type}`,
 				name: `Open search view (${type})`,
-				callback: async () => initSearchViewWithLeaf(this.app, type)
+				callback: async () => {
+					const existingLeaf = this.app.workspace.getLeavesOfType("search");
+					switch (type) {
+						case "window":
+							// @ts-ignore
+							const isExistingWindowLeaf = existingLeaf.find((leaf) => leaf.parentSplit.parent.type === "window");
+							if (isExistingWindowLeaf) {
+								this.app.workspace.revealLeaf(isExistingWindowLeaf);
+								return;
+							}
+							await initSearchViewWithLeaf(this.app, type);
+							break;
+						case "tab":
+						case "split":
+							// @ts-ignore
+							const isExistingLeaf = existingLeaf.find((leaf) => !leaf.parentSplit.parent.side);
+							if (isExistingLeaf) {
+								this.app.workspace.revealLeaf(isExistingLeaf);
+								isExistingLeaf.setViewState({
+									type: "search",
+									active: true,
+									state: this.state
+								});
+								return;
+							}
+							await initSearchViewWithLeaf(this.app, type);
+							break;
+					}
+				}
 			});
 		}
 	}
@@ -649,6 +707,8 @@ class FloatSearchModal extends Modal {
 	private fileEl: HTMLElement;
 	private viewType: string;
 
+	private focusdItem: any;
+
 	constructor(cb: (state: any) => void, plugin: FloatSearchPlugin, state: any, viewType: string = "search") {
 		super(plugin.app);
 		this.plugin = plugin;
@@ -711,6 +771,11 @@ class FloatSearchModal extends Modal {
 		altEnterIconEl.setText("Alt+↵");
 		altEnterTextEl.setText("Open File and Close");
 
+
+		const ctrlEnterIconEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
+		const ctrlEnterTextEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
+		altEnterIconEl.setText("Ctrl+↵");
+		altEnterTextEl.setText("Create File When Not Exist");
 		const tabIconEl = tabInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
 		const tabTextEl = tabInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
 		tabIconEl.setText("Tab/Shift+Tab");
@@ -767,10 +832,16 @@ class FloatSearchModal extends Modal {
 							if (currentView.dom.focusedItem.collapsible) {
 								currentView.dom.focusedItem.setCollapse(false);
 							}
+
+							this.focusdItem = currentView.dom.focusedItem;
+
 						}
 						break;
 					} else {
 						currentView.onKeyArrowDownInFocus(e);
+
+						this.focusdItem = currentView.dom.focusedItem;
+
 						break;
 					}
 				case "ArrowUp":
@@ -780,10 +851,19 @@ class FloatSearchModal extends Modal {
 							if (currentView.dom.focusedItem.collapseEl) {
 								currentView.dom.focusedItem.setCollapse(true);
 							}
+
+							this.focusdItem = currentView.dom.focusedItem;
+
 						}
 						break;
 					} else {
 						currentView.onKeyArrowUpInFocus(e);
+
+						this.focusdItem = currentView.dom.focusedItem;
+						if (!currentView.dom.focusedItem.content) {
+							this.focusdItem = undefined;
+						}
+
 						break;
 					}
 				case "ArrowLeft":
@@ -793,6 +873,14 @@ class FloatSearchModal extends Modal {
 					currentView.onKeyArrowRightInFocus(e);
 					break;
 				case "Enter":
+					if (Keymap.isModifier(e, 'Mod') && Keymap.isModifier(e, 'Shift') && !this.focusdItem) {
+						e.preventDefault();
+						const fileName = inputEl.value.trim();
+						const real = fileName.replace(/[/\\?%*:|"<>]/g, '-');
+						this.plugin.app.workspace.openLinkText(real, "", true);
+						this.close();
+						break;
+					}
 					currentView.onKeyEnterInFocus(e);
 					if (e.altKey && currentView.dom.focusedItem) {
 						this.close();
@@ -872,6 +960,9 @@ class FloatSearchModal extends Modal {
 			if (e.altKey || !this.fileLeaf) {
 				while (targetElement) {
 					if (targetElement.classList.contains('tree-item-icon')) {
+						break;
+					}
+					if (targetElement.classList.contains('search-result-hover-button')) {
 						break;
 					}
 					if (targetElement.classList.contains('tree-item')) {
