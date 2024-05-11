@@ -1,7 +1,6 @@
 import {
 	addIcon,
 	App,
-	debounce,
 	Editor,
 	ExtraButtonComponent, Keymap,
 	Menu,
@@ -11,7 +10,7 @@ import {
 	PaneType,
 	Plugin,
 	Scope,
-	SearchView,
+	SearchView, setIcon, Setting,
 	TAbstractFile,
 	TFile,
 	Workspace,
@@ -21,6 +20,7 @@ import {
 } from 'obsidian';
 import { EmbeddedView, isEmebeddedLeaf, spawnLeafView } from "./leafView";
 import { around } from "monkey-around";
+import { debounce } from "obsidian";
 
 type sortOrder =
 	"alphabetical"
@@ -49,6 +49,7 @@ interface searchState {
 
 interface FloatSearchSettings {
 	searchViewState: searchState;
+	showFilePath: boolean;
 }
 
 
@@ -60,7 +61,8 @@ const DEFAULT_SETTINGS: FloatSearchSettings = {
 		matchingCase: false,
 		query: "",
 		sortOrder: "alphabetical",
-	}
+	},
+	showFilePath: false,
 };
 
 const allViews: viewType[] = [{
@@ -82,15 +84,15 @@ const allViews: viewType[] = [{
 
 const initSearchViewWithLeaf = async (app: App, type: PaneType | 'sidebar', state?: searchState) => {
 	const leaf = type === 'sidebar' ? app.workspace.getLeftLeaf(false) : app.workspace.getLeaf(type);
-	leaf.setPinned(type !== 'sidebar');
-	await leaf.setViewState({
+	leaf?.setPinned(type !== 'sidebar');
+	await leaf?.setViewState({
 		type: "search",
 		active: true,
 		state: state
 	});
 
 	setTimeout(() => {
-		const inputEl = leaf.containerEl.getElementsByTagName("input")[0];
+		const inputEl = leaf?.containerEl.getElementsByTagName("input")?.[0];
 		inputEl.focus();
 	}, 0);
 };
@@ -99,6 +101,8 @@ export default class FloatSearchPlugin extends Plugin {
 	settings: FloatSearchSettings;
 	private state: any;
 	private modal: FloatSearchModal;
+
+	patchedDomChildren = false;
 
 	public applySettingsUpdate = debounce(async () => {
 		await this.saveSettings();
@@ -120,6 +124,7 @@ export default class FloatSearchPlugin extends Plugin {
 			this.patchWorkspace();
 			this.patchWorkspaceLeaf();
 			this.patchSearchView();
+			this.patchVchildren();
 		});
 
 		this.registerObsidianURIHandler();
@@ -128,11 +133,24 @@ export default class FloatSearchPlugin extends Plugin {
 		this.registerContextMenuHandler();
 
 		this.addRibbonIcon('search', 'Search Obsidian In Modal', () => this.initModal(this.state, true, true));
+		this.updateFilePathVisibility();
 	}
 
 	onunload() {
 		this.state = undefined;
 		this.modal?.close();
+	}
+
+	updateFilePathVisibility() {
+		const {showFilePath} = this.settings;
+		console.log(showFilePath);
+		document.body.toggleClass("show-file-path", showFilePath);
+	}
+
+	changeFilePathVisibility() {
+		this.settings.showFilePath = !this.settings.showFilePath;
+		this.updateFilePathVisibility();
+		this.applySettingsUpdate();
 	}
 
 	registerIcons() {
@@ -172,6 +190,7 @@ export default class FloatSearchPlugin extends Plugin {
 							}
 
 							const newLeaf = self.app.workspace.getMostRecentLeaf();
+
 							if (newLeaf) {
 								this.setActiveLeaf(newLeaf);
 							}
@@ -205,10 +224,12 @@ export default class FloatSearchPlugin extends Plugin {
 					if (layoutChanging) return false;  // Don't let HEs close during workspace change
 
 					// 0.14.x doesn't have WorkspaceContainer; this can just be an instanceof check once 15.x is mandatory:
+
 					if (parent === self.app.workspace.rootSplit || (WorkspaceContainer && parent instanceof WorkspaceContainer)) {
 						for (const popover of EmbeddedView.popoversForWindow((parent as WorkspaceContainer).win)) {
 							// Use old API here for compat w/0.14.x
 							if (old.call(this, cb, popover.rootSplit)) return false;
+
 						}
 					}
 					return false;
@@ -384,6 +405,7 @@ export default class FloatSearchPlugin extends Plugin {
 					onOpen(old) {
 						return function () {
 							old.call(this);
+
 							(this.scope as Scope).register(['Mod'], 'w', () => {
 								this.leaf?.detach();
 							});
@@ -399,6 +421,16 @@ export default class FloatSearchPlugin extends Plugin {
 								layoutMenu.showAtPosition({x: viewSwitchButtonPos.x, y: viewSwitchButtonPos.y + 30});
 							});
 							targetEl.parentElement.insertBefore(viewSwitchEl, targetEl);
+							if (!this.hidePathToggle) {
+								this.hidePathToggle = new Setting(this.searchParamsContainerEl).setName('Show file path').addToggle((toggle) => {
+									toggle.toggleEl.toggleClass('mod-small', true);
+									toggle.setValue(self.settings.showFilePath).onChange(async (value) => {
+										self.settings.showFilePath = !value;
+										self.changeFilePathVisibility();
+										self.applySettingsUpdate();
+									});
+								});
+							}
 						};
 					},
 					setState(old) {
@@ -421,6 +453,52 @@ export default class FloatSearchPlugin extends Plugin {
 			if (!patchSearch()) {
 				const evt = this.app.workspace.on("layout-change", () => {
 					patchSearch() && this.app.workspace.offref(evt);
+				});
+				this.registerEvent(evt);
+			}
+		});
+	}
+
+	patchVchildren() {
+		const patchSearchDom = () => {
+			const searchView = this.app.workspace.getLeavesOfType("search")[0]?.view as any;
+			if (!searchView) return false;
+
+			const dom = searchView.dom.constructor;
+			const self = this;
+
+			this.register(
+				around(dom.prototype, {
+					stopLoader(old) {
+						return function () {
+							old.call(this);
+							// console.log(this?.vChildren?.children);
+							this?.vChildren?.children?.forEach((child: any) => {
+								if (child?.file && !child?.pathEl) {
+									const path = (child?.file.parent?.path) || '/';
+									const pathEl = createDiv({cls: "search-result-file-path"});
+									const pathIconEl = pathEl.createDiv({cls: "search-result-file-path-icon"});
+									setIcon(pathIconEl, "folder");
+									const pathTextEl = pathEl.createDiv({
+										cls: "search-result-file-path-text",
+										text: path
+									});
+									child.pathEl = pathEl;
+									const titleEl = child.containerEl.find('.search-result-file-title');
+									titleEl.prepend(pathEl);
+								}
+							});
+
+						};
+					}
+				})
+			);
+			return true;
+		};
+		this.app.workspace.onLayoutReady(() => {
+			if (!patchSearchDom()) {
+				const evt = this.app.workspace.on("layout-change", () => {
+					patchSearchDom() && this.app.workspace.offref(evt);
 				});
 				this.registerEvent(evt);
 			}
@@ -462,8 +540,17 @@ export default class FloatSearchPlugin extends Plugin {
 
 	registerObsidianCommands() {
 		this.addCommand({
+			id: 'show-or-hide-file-path',
+			name: 'Show/hide file path',
+			callback: () => {
+				this.changeFilePathVisibility();
+			}
+		});
+
+
+		this.addCommand({
 			id: 'search-obsidian-globally',
-			name: 'Search Obsidian Globally',
+			name: 'Search obsidian globally',
 			callback: () => this.initModal({...this.state, query: "", current: false}, false, true)
 		});
 
@@ -477,7 +564,7 @@ export default class FloatSearchPlugin extends Plugin {
 
 		this.createCommand({
 			id: 'search-in-backlink',
-			name: 'Search In Backlink Of Current File',
+			name: 'Search in backlink Of current file',
 			queryBuilder: (file) => {
 				return " /\\[\\[" + (file.extension === "canvas" ? file.name : file.basename) + "(\\|[^\\]]*)?\\]\\]/";
 			}
@@ -485,7 +572,7 @@ export default class FloatSearchPlugin extends Plugin {
 
 		this.createCommand({
 			id: 'search-in-current-file',
-			name: 'Search In Current File',
+			name: 'Search in current file',
 			queryBuilder: (file) => {
 				return " path:" + `"${file.path}"`;
 			}
@@ -494,7 +581,7 @@ export default class FloatSearchPlugin extends Plugin {
 		for (const type of ['split', 'tab', 'window'] as PaneType[]) {
 			this.addCommand({
 				id: `open-search-view-${type}`,
-				name: `Open Search View (${type})`,
+				name: `Open search view (${type})`,
 				callback: async () => {
 					const existingLeaf = this.app.workspace.getLeavesOfType("search");
 					switch (type) {
@@ -706,12 +793,16 @@ class FloatSearchModal extends Modal {
 							if (currentView.dom.focusedItem.collapsible) {
 								currentView.dom.focusedItem.setCollapse(false);
 							}
+
 							this.focusdItem = currentView.dom.focusedItem;
+
 						}
 						break;
 					} else {
 						currentView.onKeyArrowDownInFocus(e);
+
 						this.focusdItem = currentView.dom.focusedItem;
+
 						break;
 					}
 				case "ArrowUp":
@@ -721,15 +812,19 @@ class FloatSearchModal extends Modal {
 							if (currentView.dom.focusedItem.collapseEl) {
 								currentView.dom.focusedItem.setCollapse(true);
 							}
+
 							this.focusdItem = currentView.dom.focusedItem;
+
 						}
 						break;
 					} else {
 						currentView.onKeyArrowUpInFocus(e);
+
 						this.focusdItem = currentView.dom.focusedItem;
 						if (!currentView.dom.focusedItem.content) {
 							this.focusdItem = undefined;
 						}
+
 						break;
 					}
 				case "ArrowLeft":
@@ -808,6 +903,7 @@ class FloatSearchModal extends Modal {
 						navigator.clipboard.writeText(text);
 					}
 					break;
+
 			}
 		};
 	}
@@ -834,7 +930,6 @@ class FloatSearchModal extends Modal {
 						this.close();
 						break;
 					}
-
 					targetElement = targetElement.parentElement;
 				}
 				return;

@@ -8,7 +8,6 @@ If your plugin does not need CSS, delete this file.
 */
 .float-search-modal {
 	width: 700px;
-
 	padding-bottom: 0;
 }
 
@@ -110,4 +109,36 @@ If your plugin does not need CSS, delete this file.
 	stroke-width: 2;
 	stroke-linecap: round;
 	stroke-linejoin: round;
+}
+
+body:not(.show-file-path) .search-result-file-title .search-result-file-path {
+	display: none;
+}
+
+.show-file-path .search-result-file-title .search-result-file-path {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-bolder);
+	margin-right: var(--size-2-2);
+	padding: 1px;
+	padding-left: var(--size-4-2);
+	background-color: var(--background-secondary-alt);
+	padding-right: var(--size-4-2);
+	border-radius: var(--radius-s);
+
+	--icon-size: 12px;
+}
+
+.show-file-path .search-result-file-title .search-result-file-path-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-right: var(--size-2-2);
+}
+
+.show-file-path .search-result-file-title .search-result-file-path:hover {
+	background-color: var(--background-secondary);
 }

@@ -1,7 +1,7 @@
 {
 	"id": "float-search",
 	"name": "Floating Search",
-	"version": "3.4.10",
+	"version": "3.5.1",
 	"minAppVersion": "0.15.0",
 	"description": "You can use search view in modal/leaf/popout window now.",
 	"author": "Boninall",
