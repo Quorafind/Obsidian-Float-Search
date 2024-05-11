@@ -591,6 +591,17 @@ export default class FloatSearchPlugin extends Plugin {
 	}
 }
 
+function createInstructionElement(parentEl: HTMLElement, divCls: string, keyText: string, text: string) {
+	const divEl = parentEl.createDiv({cls: divCls});
+	const iconEl = divEl.createSpan({cls: "float-search-modal-instructions-key"});
+	const textEl = divEl.createSpan({cls: "float-search-modal-instructions-text"});
+
+	iconEl.setText(keyText);
+	textEl.setText(text);
+
+	return {divEl, iconEl, textEl};
+}
+
 
 class FloatSearchModal extends Modal {
 	private readonly plugin: FloatSearchPlugin;
@@ -646,54 +657,14 @@ class FloatSearchModal extends Modal {
 	}
 
 	initInstructions(instructionsEl: HTMLElement) {
-		const navigateInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-navigate"});
-		const collapseInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-collapse"});
-		const enterInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-enter"});
-		const altEnterInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-alt-enter"});
-
-		const tabInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-tab"});
-		const switchInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-switch"});
-
-		const navigateIconEl = navigateInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const navigateTextEl = navigateInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		navigateIconEl.setText("↑↓");
-		navigateTextEl.setText("Navigate");
-
-		const collapseIconEl = collapseInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const collapseTextEl = collapseInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		collapseIconEl.setText("Shift+↑↓");
-		collapseTextEl.setText("Collapse/Expand");
-
-		const enterIconEl = enterInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const enterTextEl = enterInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		enterIconEl.setText("↵");
-		enterTextEl.setText("Open in background");
-
-		const altEnterIconEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const altEnterTextEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		altEnterIconEl.setText("Alt+↵");
-		altEnterTextEl.setText("Open File and Close");
-
-		const ctrlEnterIconEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const ctrlEnterTextEl = altEnterInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		altEnterIconEl.setText("Ctrl+↵");
-		altEnterTextEl.setText("Create File When Not Exist");
-
-		const tabIconEl = tabInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const tabTextEl = tabInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		tabIconEl.setText("Tab/Shift+Tab");
-		tabTextEl.setText("Preview/Close Preview");
-
-		const switchIconEl = switchInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const switchTextEl = switchInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		switchIconEl.setText("Ctrl+G");
-		switchTextEl.setText("Switch Between Search and File View");
-
-		const clickInstructionsEl = instructionsEl.createDiv({cls: "float-search-modal-instructions-click"});
-		const clickIconEl = clickInstructionsEl.createSpan({cls: "float-search-modal-instructions-key"});
-		const clickTextEl = clickInstructionsEl.createSpan({cls: "float-search-modal-instructions-text"});
-		clickIconEl.setText("Alt+Click");
-		clickTextEl.setText("Close Modal While In File View");
+		const navigate = createInstructionElement(instructionsEl, "float-search-modal-instructions-navigate", "↑↓", "Navigate");
+		const collapse = createInstructionElement(instructionsEl, "float-search-modal-instructions-collapse", "Shift+↑↓", "Collapse/Expand");
+		const enter = createInstructionElement(instructionsEl, "float-search-modal-instructions-enter", "↵", "Open in background");
+		const altEnter = createInstructionElement(instructionsEl, "float-search-modal-instructions-alt-enter", "Alt+↵", "Open File and Close");
+		const ctrlEnter = createInstructionElement(instructionsEl, "float-search-modal-instructions-ctrl-enter", "Ctrl+↵", "Create File When Not Exist");
+		const tab = createInstructionElement(instructionsEl, "float-search-modal-instructions-tab", "Tab/Shift+Tab", "Preview/Close Preview");
+		const switchView = createInstructionElement(instructionsEl, "float-search-modal-instructions-switch", "Ctrl+G", "Switch Between Search and File View");
+		const click = createInstructionElement(instructionsEl, "float-search-modal-instructions-click", "Alt+Click", "Close Modal While In File View");
 	}
 
 	initCss(contentEl: HTMLElement, modalEl: HTMLElement, containerEl: HTMLElement) {
