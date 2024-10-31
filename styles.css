@@ -15,7 +15,8 @@ If your plugin does not need CSS, delete this file.
 	width: 1200px;
 }
 
-.float-search-modal-search-ctn, .float-search-modal-file-ctn {
+.float-search-modal-search-ctn,
+.float-search-modal-file-ctn {
 	height: 100%;
 	width: 100%;
 }
@@ -63,7 +64,6 @@ If your plugin does not need CSS, delete this file.
 	z-index: 30;
 }
 
-
 .float-search-modal-instructions {
 	border-top: 1px solid var(--background-secondary);
 	user-select: none;
@@ -82,7 +82,8 @@ If your plugin does not need CSS, delete this file.
 	margin-right: var(--size-2-2);
 }
 
-.float-search-modal-content:has(.float-search-modal-file-ctn) .float-search-modal-search-ctn {
+.float-search-modal-content:has(.float-search-modal-file-ctn)
+	.float-search-modal-search-ctn {
 	border-right: 1px solid var(--background-secondary);
 }
 
@@ -141,4 +142,8 @@ body:not(.show-file-path) .search-result-file-title .search-result-file-path {
 
 .show-file-path .search-result-file-title .search-result-file-path:hover {
 	background-color: var(--background-secondary);
+}
+
+.fs-leaf-view .workspace-split {
+	background-color: var(--background-primary);
 }

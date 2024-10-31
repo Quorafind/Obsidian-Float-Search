@@ -53,7 +53,7 @@ function nosuper<T>(base: new (...args: unknown[]) => T): new () => T {
 
 export const spawnLeafView = (plugin: FloatSearchPlugin, initiatingEl?: HTMLElement, leaf?: WorkspaceLeaf, onShowCallback?: () => unknown): [WorkspaceLeaf, EmbeddedView] => {
 	// When Obsidian doesn't set any leaf active, use leaf instead.
-	let parent = app.workspace.activeLeaf as unknown as EmbeddedViewParent;
+	let parent = plugin.app.workspace.activeLeaf as unknown as EmbeddedViewParent;
 	if (!parent) parent = leaf as unknown as EmbeddedViewParent;
 
 	if (!initiatingEl) initiatingEl = parent?.containerEl;
@@ -72,7 +72,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 	detaching = false;
 	opening = false;
 
-	rootSplit: WorkspaceSplit = new (WorkspaceSplit as ConstructableWorkspaceSplit)(window.app.workspace, "vertical");
+	rootSplit: WorkspaceSplit = new (WorkspaceSplit as ConstructableWorkspaceSplit)(this.plugin.app.workspace, "vertical");
 
 	isPinned = true;
 
@@ -93,9 +93,9 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 	originalLinkText: string;
 	static activePopover?: EmbeddedView;
 
-	static activeWindows() {
+	static activeWindows(plugin: FloatSearchPlugin) {
 		const windows: Window[] = [window];
-		const {floatingSplit} = app.workspace;
+		const {floatingSplit} = plugin.app.workspace;
 		if (floatingSplit) {
 			for (const split of floatingSplit.children) {
 				if (split.win) windows.push(split.win);
@@ -104,16 +104,16 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 		return windows;
 	}
 
-	static containerForDocument(doc: Document) {
-		if (doc !== document && app.workspace.floatingSplit)
-			for (const container of app.workspace.floatingSplit.children) {
+	static containerForDocument(doc: Document, plugin: FloatSearchPlugin) {
+		if (doc !== document && plugin.app.workspace.floatingSplit)
+			for (const container of plugin.app.workspace.floatingSplit.children) {
 				if (container.doc === doc) return container;
 			}
-		return app.workspace.rootSplit;
+		return plugin.app.workspace.rootSplit;
 	}
 
-	static activePopovers() {
-		return this.activeWindows().flatMap(this.popoversForWindow);
+	static activePopovers(plugin: FloatSearchPlugin) {
+		return this.activeWindows(plugin).flatMap(this.popoversForWindow);
 	}
 
 	static popoversForWindow(win?: Window) {
@@ -128,8 +128,8 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 		return el ? popovers.get(el) : undefined;
 	}
 
-	static iteratePopoverLeaves(ws: Workspace, cb: (leaf: WorkspaceLeaf) => boolean | void) {
-		for (const popover of this.activePopovers()) {
+	static iteratePopoverLeaves(ws: Workspace, cb: (leaf: WorkspaceLeaf) => boolean | void, plugin: FloatSearchPlugin) {
+		for (const popover of this.activePopovers(plugin)) {
 			if (popover.rootSplit && ws.iterateLeaves(cb, popover.rootSplit)) return true;
 		}
 		return false;
@@ -252,7 +252,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 
 	attachLeaf(): WorkspaceLeaf {
 		this.rootSplit.getRoot = () => this.plugin.app.workspace[this.document === document ? "rootSplit" : "floatingSplit"]!;
-		this.rootSplit.getContainer = () => EmbeddedView.containerForDocument(this.document);
+		this.rootSplit.getContainer = () => EmbeddedView.containerForDocument(this.document, this.plugin);
 
 		this.titleEl.insertAdjacentElement("afterend", this.rootSplit.containerEl);
 		const leaf = this.plugin.app.workspace.createLeafInParent(this.rootSplit, 0);
@@ -264,7 +264,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 	onload(): void {
 		super.onload();
 		this.registerEvent(this.plugin.app.workspace.on("layout-change", this.updateLeaves, this));
-		this.registerEvent(app.workspace.on("layout-change", () => {
+		this.registerEvent(this.plugin.app.workspace.on("layout-change", () => {
 			// Ensure that top-level items in a popover are not tabbed
 			// @ts-ignore
 			this.rootSplit.children.forEach((item: any, index: any) => {
@@ -326,7 +326,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 	}
 
 	shouldShowChild(): boolean {
-		return EmbeddedView.activePopovers().some(popover => {
+		return EmbeddedView.activePopovers(this.plugin).some(popover => {
 			if (popover !== this && popover.targetEl && this.hoverEl.contains(popover.targetEl)) {
 				return popover.shouldShow();
 			}
@@ -355,7 +355,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 
 		this.targetEl.appendChild(this.hoverEl);
 		this.onShow();
-		app.workspace.onLayoutChange();
+		this.plugin.app.workspace.onLayoutChange();
 
 		// initializingHoverPopovers.remove(this);
 		// activeHoverPopovers.push(this);
@@ -465,7 +465,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 		eState = Object.assign(this.buildEphemeralState(file, link), eState);
 		const parentMode = this.getDefaultMode();
 		const state = this.buildState(parentMode, eState);
-		const leaf = await this.openFile(file, state, createInLeaf);
+		const leaf = await this.openFile(file, state as OpenViewState, createInLeaf);
 		const leafViewType = leaf?.view?.getViewType();
 		// console.log(leaf);
 		if (leafViewType === "image") {

@@ -1,290 +1,326 @@
 import "obsidian";
 import {
-    EditorPosition,
-    EphemeralState,
-    Loc,
-    MarkdownPreviewRenderer, MarkdownSubView,
-    Plugin,
-    PluginManifest,
-    SuggestModal,
-    TFile, TFolder,
-    View, WorkspaceItem,
-    WorkspaceLeaf
+	EditorPosition,
+	EphemeralState,
+	Loc,
+	MarkdownPreviewRenderer,
+	MarkdownSubView,
+	Plugin,
+	PluginManifest,
+	SuggestModal,
+	TFile,
+	TFolder,
+	View,
+	WorkspaceItem,
+	WorkspaceLeaf,
 } from "obsidian";
 import { EmbeddedViewParent } from "../leafView";
 
 interface InternalPlugins {
-    switcher: QuickSwitcherPlugin;
-    "page-preview": InternalPlugin;
-    graph: GraphPlugin;
+	switcher: QuickSwitcherPlugin;
+	"page-preview": InternalPlugin;
+	graph: GraphPlugin;
 }
 
 interface OpenViewState {
-    eState?: EphemeralState;
-    state?: { mode: string };
-    active?: boolean;
+	eState?: Record<string, unknown>;
+	state?: { mode: string };
+	active?: boolean;
 }
 
 declare class QuickSwitcherModal extends SuggestModal<TFile> {
-    getSuggestions(query: string): TFile[] | Promise<TFile[]>;
+	getSuggestions(query: string): TFile[] | Promise<TFile[]>;
 
-    renderSuggestion(value: TFile, el: HTMLElement): unknown;
+	renderSuggestion(value: TFile, el: HTMLElement): unknown;
 
-    onChooseSuggestion(item: TFile, evt: MouseEvent | KeyboardEvent): unknown;
+	onChooseSuggestion(item: TFile, evt: MouseEvent | KeyboardEvent): unknown;
 }
 
 interface InternalPlugin {
-    disable(): void;
+	disable(): void;
 
-    enable(): void;
+	enable(): void;
 
-    enabled: boolean;
-    _loaded: boolean;
-    instance: { name: string; id: string };
+	enabled: boolean;
+	_loaded: boolean;
+	instance: { name: string; id: string };
 }
 
 interface GraphPlugin extends InternalPlugin {
-    views: { localgraph: (leaf: WorkspaceLeaf) => GraphView };
+	views: { localgraph: (leaf: WorkspaceLeaf) => GraphView };
 }
 
 interface GraphView extends View {
-    engine: typeof Object;
-    renderer: { worker: { terminate(): void } };
+	engine: typeof Object;
+	renderer: { worker: { terminate(): void } };
 }
 
 interface QuickSwitcherPlugin extends InternalPlugin {
-    instance: {
-        name: string;
-        id: string;
-        QuickSwitcherModal: typeof QuickSwitcherModal;
-    };
+	instance: {
+		name: string;
+		id: string;
+		QuickSwitcherModal: typeof QuickSwitcherModal;
+	};
 }
 
 declare global {
-    const i18next: {
-        t(id: string): string;
-    };
+	const i18next: {
+		t(id: string): string;
+	};
 
-    interface Window {
-        activeWindow: Window;
-        activeDocument: Document;
-    }
+	interface Window {
+		activeWindow: Window;
+		activeDocument: Document;
+	}
 }
 
 declare module "obsidian" {
-    interface App {
-        commands: {
-            listCommands(): Command[];
-            findCommand(id: string): Command;
-            removeCommand(id: string): void;
-            executeCommandById(id: string): void;
-            commands: Record<string, Command>;
-        };
-        internalPlugins: {
-            plugins: InternalPlugins;
-            getPluginById<T extends keyof InternalPlugins>(id: T): InternalPlugins[T];
-        };
-        plugins: {
-            manifests: Record<string, PluginManifest>;
-            plugins: Record<string, Plugin> & {
-                ["recent-files-obsidian"]: Plugin & {
-                    shouldAddFile(file: TFile): boolean;
-                };
-            };
-            getPlugin(id: string): Plugin;
-            getPlugin(id: "calendar"): CalendarPlugin;
-        };
-        dom: { appContainerEl: HTMLElement };
-        viewRegistry: ViewRegistry;
+	interface App {
+		commands: {
+			listCommands(): Command[];
+			findCommand(id: string): Command;
+			removeCommand(id: string): void;
+			executeCommandById(id: string): void;
+			commands: Record<string, Command>;
+		};
+		internalPlugins: {
+			plugins: InternalPlugins;
+			getPluginById<T extends keyof InternalPlugins>(
+				id: T
+			): InternalPlugins[T];
+		};
+		plugins: {
+			manifests: Record<string, PluginManifest>;
+			plugins: Record<string, Plugin> & {
+				["recent-files-obsidian"]: Plugin & {
+					shouldAddFile(file: TFile): boolean;
+				};
+			};
+			getPlugin(id: string): Plugin;
+			getPlugin(id: "calendar"): CalendarPlugin;
+		};
+		dom: { appContainerEl: HTMLElement };
+		viewRegistry: ViewRegistry;
 
-        openWithDefaultApp(path: string): void;
-    }
+		openWithDefaultApp(path: string): void;
 
-    interface ViewRegistry {
-        typeByExtension: Record<string, string>; // file extensions to view types
-        viewByType: Record<string, (leaf: WorkspaceLeaf) => View>; // file extensions to view types
-    }
+		dragManager: any;
+	}
 
-    interface CalendarPlugin {
-        view: View;
-    }
+	interface ViewRegistry {
+		typeByExtension: Record<string, string>; // file extensions to view types
+		viewByType: Record<string, (leaf: WorkspaceLeaf) => View>; // file extensions to view types
+	}
 
-    interface WorkspaceParent {
-        insertChild(index: number, child: WorkspaceItem, resize?: boolean): void;
+	interface CalendarPlugin {
+		view: View;
+	}
 
-        replaceChild(index: number, child: WorkspaceItem, resize?: boolean): void;
+	interface WorkspaceParent {
+		insertChild(
+			index: number,
+			child: WorkspaceItem,
+			resize?: boolean
+		): void;
 
-        removeChild(leaf: WorkspaceLeaf, resize?: boolean): void;
+		replaceChild(
+			index: number,
+			child: WorkspaceItem,
+			resize?: boolean
+		): void;
 
-        containerEl: HTMLElement;
-        children: any;
-    }
+		removeChild(leaf: WorkspaceLeaf, resize?: boolean): void;
 
-    interface MarkdownEditView {
-        editorEl: HTMLElement;
-    }
+		containerEl: HTMLElement;
+		children: any;
+		parent: any;
+	}
 
-    class MarkdownPreviewRendererStatic extends MarkdownPreviewRenderer {
-        static registerDomEvents(el: HTMLElement, handlerInstance: unknown, cb: (el: HTMLElement) => unknown): void;
-    }
+	interface MarkdownEditView {
+		editorEl: HTMLElement;
+	}
 
-    interface WorkspaceLeaf {
-        openLinkText(linkText: string, path: string, state?: unknown): Promise<void>;
+	class MarkdownPreviewRendererStatic extends MarkdownPreviewRenderer {
+		static registerDomEvents(
+			el: HTMLElement,
+			handlerInstance: unknown,
+			cb: (el: HTMLElement) => unknown
+		): void;
+	}
 
-        updateHeader(): void;
+	interface WorkspaceLeaf {
+		openLinkText(
+			linkText: string,
+			path: string,
+			state?: unknown
+		): Promise<void>;
 
-        containerEl: HTMLDivElement;
-        working: boolean;
-        parentSplit: WorkspaceParent;
-        activeTime: number;
-    }
+		updateHeader(): void;
 
-    interface Workspace {
-        recordHistory(leaf: WorkspaceLeaf, pushHistory: boolean): void;
+		containerEl: HTMLDivElement;
+		working: boolean;
+		parentSplit: WorkspaceParent;
+		activeTime: number;
+	}
 
-        iterateLeaves(callback: (item: WorkspaceLeaf) => boolean | void, item: WorkspaceItem | WorkspaceItem[]): boolean;
+	interface Workspace {
+		recordHistory(leaf: WorkspaceLeaf, pushHistory: boolean): void;
 
-        iterateLeaves(item: WorkspaceItem | WorkspaceItem[], callback: (item: WorkspaceLeaf) => boolean | void): boolean;
+		iterateLeaves(
+			callback: (item: WorkspaceLeaf) => boolean | void,
+			item: WorkspaceItem | WorkspaceItem[]
+		): boolean;
 
-        getDropLocation(event: MouseEvent): {
-            target: WorkspaceItem;
-            sidedock: boolean;
-        };
+		iterateLeaves(
+			item: WorkspaceItem | WorkspaceItem[],
+			callback: (item: WorkspaceLeaf) => boolean | void
+		): boolean;
 
-        recursiveGetTarget(event: MouseEvent, parent: WorkspaceParent): WorkspaceItem;
+		getDropLocation(event: MouseEvent): {
+			target: WorkspaceItem;
+			sidedock: boolean;
+		};
 
-        recordMostRecentOpenedFile(file: TFile): void;
+		recursiveGetTarget(
+			event: MouseEvent,
+			parent: WorkspaceParent
+		): WorkspaceItem;
 
-        onDragLeaf(event: MouseEvent, leaf: WorkspaceLeaf): void;
+		recordMostRecentOpenedFile(file: TFile): void;
 
-        onLayoutChange(): void;  // tell Obsidian leaves have been added/removed/etc.
-        activeLeafEvents(): void;
+		onDragLeaf(event: MouseEvent, leaf: WorkspaceLeaf): void;
 
-        floatingSplit: any;
+		onLayoutChange(): void; // tell Obsidian leaves have been added/removed/etc.
+		activeLeafEvents(): void;
 
-        pushUndoHistory(leaf: WorkspaceLeaf, id: string, e: any): void;
-    }
+		floatingSplit: any;
 
-    interface Editor {
-        getClickableTokenAt(pos: EditorPosition): {
-            text: string;
-            type: string;
-            start: EditorPosition;
-            end: EditorPosition;
-        };
-    }
+		pushUndoHistory(leaf: WorkspaceLeaf, id: string, e: any): void;
+	}
 
-    interface WorkspaceItem {
-        side?: "left" | "right";
-    }
+	interface Editor {
+		getClickableTokenAt(pos: EditorPosition): {
+			text: string;
+			type: string;
+			start: EditorPosition;
+			end: EditorPosition;
+		};
+	}
 
-    interface View {
-        iconEl: HTMLElement;
-        file: TFile;
+	interface WorkspaceItem {
+		side?: "left" | "right";
+	}
 
-        setMode(mode: MarkdownSubView): Promise<void>;
+	interface View {
+		iconEl: HTMLElement;
+		file: TFile;
 
-        followLinkUnderCursor(newLeaf: boolean): void;
+		setMode(mode: MarkdownSubView): Promise<void>;
 
-        modes: Record<string, MarkdownSubView>;
+		followLinkUnderCursor(newLeaf: boolean): void;
 
-        getMode(): string;
+		modes: Record<string, MarkdownSubView>;
 
-        headerEl: HTMLElement;
-        contentEl: HTMLElement;
-    }
+		getMode(): string;
 
-    interface SearchView extends View {
-        onKeyArrowRightInFocus(e: KeyboardEvent): void;
+		headerEl: HTMLElement;
+		contentEl: HTMLElement;
+	}
 
-        onKeyArrowLeftInFocus(e: KeyboardEvent): void;
+	interface SearchView extends View {
+		onKeyArrowRightInFocus(e: KeyboardEvent): void;
 
-        onKeyArrowUpInFocus(e: KeyboardEvent): void;
+		onKeyArrowLeftInFocus(e: KeyboardEvent): void;
 
-        onKeyArrowDownInFocus(e: KeyboardEvent): void;
+		onKeyArrowUpInFocus(e: KeyboardEvent): void;
 
-        onKeyEnterInFocus(e: KeyboardEvent): void;
+		onKeyArrowDownInFocus(e: KeyboardEvent): void;
 
-        onKeyShowMoreBefore(e: KeyboardEvent): void;
+		onKeyEnterInFocus(e: KeyboardEvent): void;
 
-        onKeyShowMoreAfter(e: KeyboardEvent): void;
+		onKeyShowMoreBefore(e: KeyboardEvent): void;
 
-        dom: any;
-        searchComponent: SearchComponent;
-        headerDom: any;
-    }
+		onKeyShowMoreAfter(e: KeyboardEvent): void;
 
-    interface EmptyView extends View {
-        actionListEl: HTMLElement;
-        emptyTitleEl: HTMLElement;
-    }
+		dom: any;
+		searchComponent: SearchComponent;
+		headerDom: any;
+	}
 
-    interface FileManager {
-        createNewMarkdownFile(folder: TFolder, fileName: string): Promise<TFile>;
-    }
+	interface EmptyView extends View {
+		actionListEl: HTMLElement;
+		emptyTitleEl: HTMLElement;
+	}
 
-    enum PopoverState {
-        Showing,
-        Shown,
-        Hiding,
-        Hidden,
-    }
+	interface FileManager {
+		createNewMarkdownFile(
+			folder: TFolder,
+			fileName: string
+		): Promise<TFile>;
+	}
 
-    interface Menu {
-        items: MenuItem[];
-        dom: HTMLElement;
-        hideCallback: () => unknown;
-    }
+	enum PopoverState {
+		Showing,
+		Shown,
+		Hiding,
+		Hidden,
+	}
 
-    interface MenuItem {
-        iconEl: HTMLElement;
-        dom: HTMLElement;
-    }
+	interface Menu {
+		items: MenuItem[];
+		dom: HTMLElement;
+		hideCallback: () => unknown;
+	}
 
-    interface EphemeralState {
-        focus?: boolean;
-        subpath?: string;
-        line?: number;
-        startLoc?: Loc;
-        endLoc?: Loc;
-        scroll?: number;
-    }
+	interface MenuItem {
+		iconEl: HTMLElement;
+		dom: HTMLElement;
+	}
 
-    interface HoverParent {
-        type?: string;
-    }
+	interface EphemeralState {
+		focus?: boolean;
+		subpath?: string;
+		line?: number;
+		startLoc?: Loc;
+		endLoc?: Loc;
+		scroll?: number;
+	}
 
-    interface WorkspaceContainer {
-        type: "window" | "split" | "tab";
-    }
+	interface HoverParent {
+		type?: string;
+	}
 
-    interface HoverPopover {
-        parent: EmbeddedViewParent | null;
-        targetEl: HTMLElement;
-        hoverEl: HTMLElement;
+	interface WorkspaceContainer {
+		type: "window" | "split" | "tab";
+	}
 
-        position(pos?: MousePos): void;
+	interface HoverPopover {
+		parent: EmbeddedViewParent | null;
+		targetEl: HTMLElement;
+		hoverEl: HTMLElement;
 
-        hide(): void;
+		position(pos?: MousePos): void;
 
-        show(): void;
+		hide(): void;
 
-        shouldShowSelf(): boolean;
+		show(): void;
 
-        timer: number;
-        waitTime: number;
+		shouldShowSelf(): boolean;
 
-        shouldShow(): boolean;
+		timer: number;
+		waitTime: number;
 
-        transition(): void;
-    }
+		shouldShow(): boolean;
 
-    interface MousePos {
-        x: number;
-        y: number;
-    }
+		transition(): void;
+	}
 
-    interface Plugin {
-        registerGlobalCommand(command: Command): void;
-    }
+	interface MousePos {
+		x: number;
+		y: number;
+	}
+
+	interface Plugin {
+		registerGlobalCommand(command: Command): void;
+	}
 }
