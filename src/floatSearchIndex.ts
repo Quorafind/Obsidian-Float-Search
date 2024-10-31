@@ -810,9 +810,11 @@ export default class FloatSearchPlugin extends Plugin {
 			around(manager.constructor.prototype, {
 				dragFile(old: any) {
 					return function (e: any, a: TFile) {
-						self?.modal?.close();
-
 						const result = old.call(this, e, a);
+
+						setTimeout(() => {
+							self?.modal?.close();
+						}, 10);
 						return result;
 					};
 				},
