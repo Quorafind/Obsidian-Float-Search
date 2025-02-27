@@ -885,7 +885,7 @@ export default class FloatSearchPlugin extends Plugin {
 				callback: () => {
 					const query = options.queryBuilder();
 					const viewType = this.settings.defaultViewType;
-					
+
 					if (viewType === "modal") {
 						this.initModal(
 							{ ...this.state, query, current: true },
@@ -903,7 +903,7 @@ export default class FloatSearchPlugin extends Plugin {
 							}
 						);
 					}
-				}
+				},
 			});
 		} else {
 			this.addCommand({
@@ -919,7 +919,7 @@ export default class FloatSearchPlugin extends Plugin {
 							const currentFile = activeLeaf.view.file;
 							const query = options.queryBuilder(currentFile);
 							const viewType = this.settings.defaultViewType;
-							
+
 							if (viewType === "modal") {
 								this.initModal(
 									{ ...this.state, query, current: true },
@@ -1023,7 +1023,10 @@ export default class FloatSearchPlugin extends Plugin {
 								);
 								return;
 							}
-							await initSearchViewWithLeaf(this.app, type);
+							await initSearchViewWithLeaf(this.app, type, {
+								...this.state,
+								triggerBySelf: true,
+							});
 							break;
 						case "tab":
 						case "split":
@@ -1043,7 +1046,10 @@ export default class FloatSearchPlugin extends Plugin {
 								});
 								return;
 							}
-							await initSearchViewWithLeaf(this.app, type);
+							await initSearchViewWithLeaf(this.app, type, {
+								...this.state,
+								triggerBySelf: true,
+							});
 							break;
 					}
 				},
@@ -1416,6 +1422,7 @@ class FloatSearchModal extends Modal {
 		this.searchLeaf.setPinned(true);
 		await this.searchLeaf.setViewState({
 			type: "search",
+			state: this.state,
 		});
 
 		setTimeout(async () => {
