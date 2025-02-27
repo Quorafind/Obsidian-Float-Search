@@ -875,30 +875,74 @@ export default class FloatSearchPlugin extends Plugin {
 	private createCommand(options: {
 		id: string;
 		name: string;
-		queryBuilder: (file: any) => string;
+		queryBuilder: (file?: TFile) => string;
+		global: boolean;
 	}): void {
-		this.addCommand({
-			id: options.id,
-			name: options.name,
-			checkCallback: (checking: boolean) => {
-				const activeLeaf = this.app.workspace.activeLeaf;
-				if (!activeLeaf) return;
-
-				const viewType = activeLeaf.view.getViewType();
-				if (viewType === "markdown" || viewType === "canvas") {
-					if (!checking) {
-						const currentFile = activeLeaf.view.file;
-						const query = options.queryBuilder(currentFile);
+		if (options.global) {
+			this.addCommand({
+				id: options.id,
+				name: options.name,
+				callback: () => {
+					const query = options.queryBuilder();
+					const viewType = this.settings.defaultViewType;
+					
+					if (viewType === "modal") {
 						this.initModal(
 							{ ...this.state, query, current: true },
 							true,
 							false
 						);
+					} else {
+						initSearchViewWithLeaf(
+							this.app,
+							viewType as PaneType | "sidebar",
+							{
+								...this.state,
+								query,
+								current: true,
+							}
+						);
 					}
-					return true;
 				}
-			},
-		});
+			});
+		} else {
+			this.addCommand({
+				id: options.id,
+				name: options.name,
+				checkCallback: (checking: boolean) => {
+					const activeLeaf = this.app.workspace.activeLeaf;
+					if (!activeLeaf) return;
+
+					const viewType = activeLeaf.view.getViewType();
+					if (viewType === "markdown" || viewType === "canvas") {
+						if (!checking) {
+							const currentFile = activeLeaf.view.file;
+							const query = options.queryBuilder(currentFile);
+							const viewType = this.settings.defaultViewType;
+							
+							if (viewType === "modal") {
+								this.initModal(
+									{ ...this.state, query, current: true },
+									true,
+									false
+								);
+							} else {
+								initSearchViewWithLeaf(
+									this.app,
+									viewType as PaneType | "sidebar",
+									{
+										...this.state,
+										query,
+										current: true,
+									}
+								);
+							}
+						}
+						return true;
+					}
+				},
+			});
+		}
 	}
 
 	registerObsidianCommands() {
@@ -935,22 +979,29 @@ export default class FloatSearchPlugin extends Plugin {
 		this.createCommand({
 			id: "search-in-backlink",
 			name: "Search in backlink Of current file",
-			queryBuilder: (file) => {
+			queryBuilder: (file?: TFile) => {
+				if (!file) return "";
 				return (
 					" /\\[\\[" +
 					(file.extension === "canvas" ? file.name : file.basename) +
 					"(\\|[^\\]]*)?\\]\\]/"
 				);
 			},
+			global: false,
 		});
 
 		this.createCommand({
 			id: "search-in-current-file",
 			name: "Search in current file",
-			queryBuilder: (file) => {
+			queryBuilder: (file?: TFile) => {
+				if (!file) return "";
 				return " path:" + `"${file.path}"`;
 			},
+			global: false,
 		});
+
+		// Register search operator commands
+		this.registerSearchOperatorCommands();
 
 		for (const type of ["split", "tab", "window"] as PaneType[]) {
 			this.addCommand({
@@ -998,6 +1049,86 @@ export default class FloatSearchPlugin extends Plugin {
 				},
 			});
 		}
+	}
+
+	registerSearchOperatorCommands() {
+		const searchOperators = [
+			{
+				id: "search-file-operator",
+				name: "Search: file: (Find text in filename)",
+				query: "file:",
+			},
+			{
+				id: "search-path-operator",
+				name: "Search: path: (Find text in file path)",
+				query: "path:",
+			},
+			{
+				id: "search-content-operator",
+				name: "Search: content: (Find text in file content)",
+				query: "content:",
+			},
+			{
+				id: "search-match-case-operator",
+				name: "Search: match-case: (Case-sensitive match)",
+				query: "match-case:",
+			},
+			{
+				id: "search-ignore-case-operator",
+				name: "Search: ignore-case: (Case-insensitive match)",
+				query: "ignore-case:",
+			},
+			{
+				id: "search-tag-operator",
+				name: "Search: tag: (Find tag)",
+				query: "tag:",
+			},
+			{
+				id: "search-line-operator",
+				name: "Search: line: (Find files with matching line)",
+				query: "line:",
+			},
+			{
+				id: "search-block-operator",
+				name: "Search: block: (Find matches in the same block)",
+				query: "block:",
+			},
+			{
+				id: "search-section-operator",
+				name: "Search: section: (Find matches in the same section)",
+				query: "section:",
+			},
+			{
+				id: "search-task-operator",
+				name: "Search: task: (Find matches in a task)",
+				query: "task:",
+			},
+			{
+				id: "search-task-todo-operator",
+				name: "Search: task-todo: (Find matches in uncompleted tasks)",
+				query: "task-todo:",
+			},
+			{
+				id: "search-task-done-operator",
+				name: "Search: task-done: (Find matches in completed tasks)",
+				query: "task-done:",
+			},
+			{
+				id: "search-property",
+				name: "Search: [property] or [property:value]",
+				query: "[]",
+			},
+		];
+
+		// Register all search operator commands
+		searchOperators.forEach((operator) => {
+			this.createCommand({
+				id: operator.id,
+				name: operator.name,
+				queryBuilder: () => operator.query || "",
+				global: true,
+			});
+		});
 	}
 
 	registerEditorMenuHandler() {
