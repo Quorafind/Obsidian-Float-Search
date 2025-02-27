@@ -179,7 +179,13 @@ export default class FloatSearchPlugin extends Plugin {
 			`Search obsidian in ${this.settings.defaultViewType} view`,
 			() => {
 				if (this.settings.defaultViewType === "modal") {
-					this.initModal(this.state, true, true);
+					// Check if a modal is already open to prevent duplicate modals
+					if (!this.modal) {
+						this.initModal(this.state, true, true);
+					} else {
+						// If a modal is already open, focus it instead of creating a new one
+						this.modal.contentEl.querySelector("input")?.focus();
+					}
 				} else {
 					initSearchViewWithLeaf(
 						this.app,
@@ -224,6 +230,10 @@ export default class FloatSearchPlugin extends Plugin {
 		stateSave: boolean = false,
 		clearQuery: boolean = false
 	) {
+		if (this.modal) {
+			this.modal.close();
+		}
+
 		this.modal = new FloatSearchModal(
 			(state) => {
 				// Preserve all state properties when updating from modal
@@ -697,9 +707,11 @@ export default class FloatSearchPlugin extends Plugin {
 								!state?.triggerBySelf
 							) {
 								if (self.queryLoaded) {
+									// Check if a modal is already open to prevent duplicate modals
 									if (
 										self.settings.defaultViewType ===
-										"modal"
+											"modal" &&
+										!self.modal // Only create a new modal if one doesn't exist
 									) {
 										self.initModal(
 											{
@@ -711,7 +723,10 @@ export default class FloatSearchPlugin extends Plugin {
 											true,
 											false
 										);
-									} else {
+									} else if (
+										self.settings.defaultViewType !==
+										"modal"
+									) {
 										initSearchViewWithLeaf(
 											self.app,
 											self.settings.defaultViewType,
@@ -887,11 +902,28 @@ export default class FloatSearchPlugin extends Plugin {
 					if (!checking) {
 						const currentFile = activeLeaf.view.file;
 						const query = options.queryBuilder(currentFile);
-						this.initModal(
-							{ ...this.state, query, current: true },
-							true,
-							false
-						);
+
+						// Check if a modal is already open to prevent duplicate modals
+						if (!this.modal) {
+							this.initModal(
+								{ ...this.state, query, current: true },
+								true,
+								false
+							);
+						} else {
+							// If a modal is already open, focus it and set the query
+							const inputEl =
+								this.modal.contentEl.querySelector("input");
+							if (inputEl) {
+								inputEl.value = query;
+								inputEl.focus();
+								// Trigger search with the new query
+								const event = new Event("input", {
+									bubbles: true,
+								});
+								inputEl.dispatchEvent(event);
+							}
+						}
 					}
 					return true;
 				}
@@ -911,23 +943,49 @@ export default class FloatSearchPlugin extends Plugin {
 		this.addCommand({
 			id: "search-obsidian-globally",
 			name: "Search obsidian globally",
-			callback: () =>
-				this.initModal(
-					{ ...this.state, query: "", current: false },
-					false,
-					true
-				),
+			callback: () => {
+				// Check if a modal is already open to prevent duplicate modals
+				if (!this.modal) {
+					this.initModal(
+						{ ...this.state, query: "", current: false },
+						false,
+						true
+					);
+				} else {
+					// If a modal is already open, focus it and clear the query
+					const inputEl = this.modal.contentEl.querySelector("input");
+					if (inputEl) {
+						inputEl.value = "";
+						inputEl.focus();
+					}
+				}
+			},
 		});
 
 		this.addCommand({
 			id: "search-obsidian-globally-state",
 			name: "Search Obsidian Globally (With Last State)",
-			callback: () =>
-				this.initModal(
-					{ ...this.state, query: this.state.query, current: false },
-					true,
-					false
-				),
+			callback: () => {
+				// Check if a modal is already open to prevent duplicate modals
+				if (!this.modal) {
+					this.initModal(
+						{
+							...this.state,
+							query: this.state.query,
+							current: false,
+						},
+						true,
+						false
+					);
+				} else {
+					// If a modal is already open, focus it and set the query to the last state
+					const inputEl = this.modal.contentEl.querySelector("input");
+					if (inputEl) {
+						inputEl.value = this.state.query || "";
+						inputEl.focus();
+					}
+				}
+			},
 		});
 
 		this.createCommand({
