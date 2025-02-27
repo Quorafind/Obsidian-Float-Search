@@ -113,6 +113,7 @@ const initSearchViewWithLeaf = async (
 		state: {
 			...DEFAULT_SETTINGS.searchViewState,
 			...state,
+			triggerBySelf: true,
 		},
 	});
 
@@ -179,13 +180,7 @@ export default class FloatSearchPlugin extends Plugin {
 			`Search obsidian in ${this.settings.defaultViewType} view`,
 			() => {
 				if (this.settings.defaultViewType === "modal") {
-					// Check if a modal is already open to prevent duplicate modals
-					if (!this.modal) {
-						this.initModal(this.state, true, true);
-					} else {
-						// If a modal is already open, focus it instead of creating a new one
-						this.modal.contentEl.querySelector("input")?.focus();
-					}
+					this.initModal(this.state, true, true);
 				} else {
 					initSearchViewWithLeaf(
 						this.app,
@@ -309,17 +304,19 @@ export default class FloatSearchPlugin extends Plugin {
 
 					// 0.14.x doesn't have WorkspaceContainer; this can just be an instanceof check once 15.x is mandatory:
 
-					if (
-						parent === self.app.workspace.rootSplit ||
-						(WorkspaceContainer &&
-							parent instanceof WorkspaceContainer)
-					) {
-						for (const popover of EmbeddedView.popoversForWindow(
-							(parent as WorkspaceContainer).win
-						)) {
-							// Use old API here for compat w/0.14.x
-							if (old.call(this, cb, popover.rootSplit))
-								return false;
+					if (!requireApiVersion("0.15.0")) {
+						if (
+							parent === self.app.workspace.rootSplit ||
+							(WorkspaceContainer &&
+								parent instanceof WorkspaceContainer)
+						) {
+							for (const popover of EmbeddedView.popoversForWindow(
+								(parent as WorkspaceContainer).win
+							)) {
+								// Use old API here for compat w/0.14.x
+								if (old.call(this, cb, popover.rootSplit))
+									return false;
+							}
 						}
 					}
 					return false;
@@ -332,11 +329,6 @@ export default class FloatSearchPlugin extends Plugin {
 						leaf.activeTime = 1700000000000;
 					}
 					return old.call(this, leaf, params);
-				};
-			},
-			onDragLeaf(old) {
-				return function (event: MouseEvent, leaf: WorkspaceLeaf) {
-					return old.call(this, event, leaf);
 				};
 			},
 			pushUndoHistory(old: any) {
@@ -707,11 +699,9 @@ export default class FloatSearchPlugin extends Plugin {
 								!state?.triggerBySelf
 							) {
 								if (self.queryLoaded) {
-									// Check if a modal is already open to prevent duplicate modals
 									if (
 										self.settings.defaultViewType ===
-											"modal" &&
-										!self.modal // Only create a new modal if one doesn't exist
+										"modal"
 									) {
 										self.initModal(
 											{
@@ -723,10 +713,7 @@ export default class FloatSearchPlugin extends Plugin {
 											true,
 											false
 										);
-									} else if (
-										self.settings.defaultViewType !==
-										"modal"
-									) {
+									} else {
 										initSearchViewWithLeaf(
 											self.app,
 											self.settings.defaultViewType,
@@ -902,28 +889,11 @@ export default class FloatSearchPlugin extends Plugin {
 					if (!checking) {
 						const currentFile = activeLeaf.view.file;
 						const query = options.queryBuilder(currentFile);
-
-						// Check if a modal is already open to prevent duplicate modals
-						if (!this.modal) {
-							this.initModal(
-								{ ...this.state, query, current: true },
-								true,
-								false
-							);
-						} else {
-							// If a modal is already open, focus it and set the query
-							const inputEl =
-								this.modal.contentEl.querySelector("input");
-							if (inputEl) {
-								inputEl.value = query;
-								inputEl.focus();
-								// Trigger search with the new query
-								const event = new Event("input", {
-									bubbles: true,
-								});
-								inputEl.dispatchEvent(event);
-							}
-						}
+						this.initModal(
+							{ ...this.state, query, current: true },
+							true,
+							false
+						);
 					}
 					return true;
 				}
@@ -943,49 +913,23 @@ export default class FloatSearchPlugin extends Plugin {
 		this.addCommand({
 			id: "search-obsidian-globally",
 			name: "Search obsidian globally",
-			callback: () => {
-				// Check if a modal is already open to prevent duplicate modals
-				if (!this.modal) {
-					this.initModal(
-						{ ...this.state, query: "", current: false },
-						false,
-						true
-					);
-				} else {
-					// If a modal is already open, focus it and clear the query
-					const inputEl = this.modal.contentEl.querySelector("input");
-					if (inputEl) {
-						inputEl.value = "";
-						inputEl.focus();
-					}
-				}
-			},
+			callback: () =>
+				this.initModal(
+					{ ...this.state, query: "", current: false },
+					false,
+					true
+				),
 		});
 
 		this.addCommand({
 			id: "search-obsidian-globally-state",
 			name: "Search Obsidian Globally (With Last State)",
-			callback: () => {
-				// Check if a modal is already open to prevent duplicate modals
-				if (!this.modal) {
-					this.initModal(
-						{
-							...this.state,
-							query: this.state.query,
-							current: false,
-						},
-						true,
-						false
-					);
-				} else {
-					// If a modal is already open, focus it and set the query to the last state
-					const inputEl = this.modal.contentEl.querySelector("input");
-					if (inputEl) {
-						inputEl.value = this.state.query || "";
-						inputEl.focus();
-					}
-				}
-			},
+			callback: () =>
+				this.initModal(
+					{ ...this.state, query: this.state.query, current: false },
+					true,
+					false
+				),
 		});
 
 		this.createCommand({
@@ -1041,10 +985,10 @@ export default class FloatSearchPlugin extends Plugin {
 								isExistingLeaf.setViewState({
 									type: "search",
 									active: true,
-									state: this.state as Record<
-										string,
-										unknown
-									>,
+									state: {
+										...this.state,
+										triggerBySelf: true,
+									} as Record<string, unknown>,
 								});
 								return;
 							}
@@ -1478,7 +1422,7 @@ class FloatSearchModal extends Modal {
 										: "preview",
 							};
 							this.fileLeaf.setViewState(estate, {
-								focus: !0,
+								focus: true,
 							});
 							setTimeout(() => {
 								(
