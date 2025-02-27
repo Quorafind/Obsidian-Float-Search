@@ -86,7 +86,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 	document: Document = this.targetEl?.ownerDocument ?? window.activeDocument ?? window.document;
 
 	id = genId(8);
-	bounce?: NodeJS.Timeout;
+	bounce?: number;
 	boundOnZoomOut: () => void;
 
 	originalPath: string; // these are kept to avoid adopting targets w/a different link
@@ -221,7 +221,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 		if (this.shouldShow()) {
 			if (this.state === PopoverState.Hiding) {
 				this.state = PopoverState.Shown;
-				clearTimeout(this.timer);
+				window.clearTimeout(this.timer);
 			}
 		} else {
 			if (this.state === PopoverState.Showing) {
@@ -391,7 +391,7 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 		// A timer might be pending to call show() for the first time, make sure
 		// it doesn't bring us back up after we close
 		if (this.timer) {
-			clearTimeout(this.timer);
+			window.clearTimeout(this.timer);
 			this.timer = 0;
 		}
 
