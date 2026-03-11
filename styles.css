@@ -9,6 +9,7 @@ If your plugin does not need CSS, delete this file.
 .float-search-modal {
 	width: 700px;
 	padding-bottom: 0;
+	transition: width 0.15s ease;
 }
 
 .float-search-modal.float-search-width {
@@ -146,4 +147,69 @@ body:not(.show-file-path) .search-result-file-title .search-result-file-path {
 
 .fs-leaf-view .workspace-split {
 	background-color: var(--background-primary);
+}
+
+/* ── CMDK Modal ── */
+.prompt.float-search-cmdk {
+	width: 700px;
+	max-width: 90vw;
+	transition: width 0.15s ease;
+}
+
+.prompt.float-search-cmdk.float-search-cmdk-expanded {
+	width: 1100px;
+}
+
+.float-search-cmdk-body {
+	display: flex;
+	flex-direction: row;
+	height: 50vh;
+	max-height: 600px;
+	overflow: hidden;
+}
+
+.float-search-cmdk-body .prompt-results {
+	max-height: none;
+	height: 100%;
+	overflow-y: auto;
+	flex: 1 1 auto;
+}
+
+.float-search-cmdk-expanded .float-search-cmdk-body .prompt-results {
+	flex: 0 0 40%;
+	border-right: 1px solid var(--background-modifier-border);
+}
+
+.float-search-cmdk-preview {
+	flex: 1;
+	overflow: hidden;
+	height: 100%;
+}
+
+.float-search-cmdk-preview .view-header {
+	display: none;
+}
+
+.float-search-cmdk-preview .view-content {
+	height: 100%;
+}
+
+.float-search-cmdk-preview .fs-block {
+	height: 100% !important;
+}
+
+.float-search-cmdk-preview .fs-content {
+	height: 100%;
+}
+
+.float-search-cmdk-preview .fs-content .workspace-split.mod-vertical {
+	height: 100%;
+}
+
+.float-search-cmdk-preview .workspace-leaf-resize-handle {
+	display: none;
+}
+
+.modal-container.float-search-cmdk-container.mod-dim {
+	z-index: 30;
 }
