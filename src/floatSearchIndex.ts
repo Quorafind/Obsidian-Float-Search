@@ -11,11 +11,16 @@ import {
 	OpenViewState,
 	PaneType,
 	Plugin,
+	prepareFuzzySearch,
+	renderResults,
+	SearchResult,
 	requireApiVersion,
 	Scope,
 	SearchView,
 	setIcon,
+	PluginSettingTab,
 	Setting,
+	SuggestModal,
 	TAbstractFile,
 	TFile,
 	ViewStateResult,
@@ -53,11 +58,15 @@ interface searchState extends Record<string, unknown> {
 	current?: boolean;
 }
 
+type CmdkTriggerKey = "Shift" | "Control" | "Alt" | "Meta" | "none";
+
 interface FloatSearchSettings {
 	searchViewState: searchState;
 	showFilePath: boolean;
 	showInstructions: boolean;
 	defaultViewType: searchType;
+	cmdkTriggerKey: CmdkTriggerKey;
+	cmdkDoubleTapInterval: number;
 }
 
 const DEFAULT_SETTINGS: FloatSearchSettings = {
@@ -72,6 +81,8 @@ const DEFAULT_SETTINGS: FloatSearchSettings = {
 	showFilePath: false,
 	showInstructions: true,
 	defaultViewType: "modal",
+	cmdkTriggerKey: "Shift",
+	cmdkDoubleTapInterval: 300,
 };
 
 const allViews: viewType[] = [
@@ -127,6 +138,7 @@ export default class FloatSearchPlugin extends Plugin {
 	settings: FloatSearchSettings;
 	private state: searchState;
 	private modal: FloatSearchModal;
+	private cmdkModal: FloatSearchCmdkModal;
 
 	allLoaded: boolean = false;
 	queryLoaded: boolean = false;
@@ -168,6 +180,7 @@ export default class FloatSearchPlugin extends Plugin {
 			this.patchSearchView();
 			this.patchVchildren();
 			this.patchDragManager();
+			this.registerDoubleKeyHandler();
 		});
 
 		this.registerObsidianURIHandler();
@@ -194,11 +207,53 @@ export default class FloatSearchPlugin extends Plugin {
 			}
 		);
 		this.updateFilePathVisibility();
+		this.addSettingTab(new FloatSearchSettingTab(this.app, this));
 	}
 
 	onunload() {
 		// this.state = DEFAULT_SETTINGS.searchViewState;
 		this.modal?.close();
+	}
+
+	registerDoubleKeyHandler() {
+		let lastKeyUp = 0;
+		let keyOnly = true;
+
+		this.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
+			const triggerKey = this.settings.cmdkTriggerKey;
+			if (triggerKey === "none" || e.key !== triggerKey) {
+				keyOnly = false;
+			}
+		});
+
+		this.registerDomEvent(document, "keyup", (e: KeyboardEvent) => {
+			const triggerKey = this.settings.cmdkTriggerKey;
+			if (triggerKey === "none") return;
+			if (e.key === triggerKey) {
+				const now = Date.now();
+				if (
+					keyOnly &&
+					now - lastKeyUp < this.settings.cmdkDoubleTapInterval &&
+					!document.querySelector(
+						".float-search-cmdk-container"
+					)
+				) {
+					lastKeyUp = 0;
+					this.openCmdkModal();
+				} else {
+					lastKeyUp = now;
+					keyOnly = true;
+				}
+			}
+		});
+	}
+
+	openCmdkModal() {
+		if (this.cmdkModal) {
+			this.cmdkModal.close();
+		}
+		this.cmdkModal = new FloatSearchCmdkModal(this);
+		this.cmdkModal.open();
 	}
 
 	updateFilePathVisibility() {
@@ -1265,6 +1320,66 @@ export default class FloatSearchPlugin extends Plugin {
 	}
 }
 
+const TRIGGER_KEY_OPTIONS: Record<CmdkTriggerKey, string> = {
+	Shift: "Double Shift",
+	Control: "Double Ctrl",
+	Alt: "Double Alt",
+	Meta: "Double Meta (Cmd/Win)",
+	none: "Disabled",
+};
+
+class FloatSearchSettingTab extends PluginSettingTab {
+	plugin: FloatSearchPlugin;
+
+	constructor(app: App, plugin: FloatSearchPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display() {
+		const { containerEl } = this;
+		containerEl.empty();
+
+		containerEl.createEl("h2", { text: "Float Search Settings" });
+
+		new Setting(containerEl)
+			.setName("Quick search trigger")
+			.setDesc(
+				"Double-tap this key to open the quick search modal (CMDK)."
+			)
+			.addDropdown((dropdown) => {
+				for (const [value, label] of Object.entries(
+					TRIGGER_KEY_OPTIONS
+				)) {
+					dropdown.addOption(value, label);
+				}
+				dropdown.setValue(this.plugin.settings.cmdkTriggerKey);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.cmdkTriggerKey =
+						value as CmdkTriggerKey;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Double-tap interval (ms)")
+			.setDesc(
+				"Maximum time between two key presses to trigger quick search. Default: 300ms."
+			)
+			.addSlider((slider) => {
+				slider
+					.setLimits(150, 600, 50)
+					.setValue(this.plugin.settings.cmdkDoubleTapInterval)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.cmdkDoubleTapInterval =
+							value;
+						await this.plugin.saveSettings();
+					});
+			});
+	}
+}
+
 function createInstructionElement(
 	parentEl: HTMLElement,
 	divCls: string,
@@ -1304,6 +1419,10 @@ class FloatSearchModal extends Modal {
 	private viewType: string;
 
 	private focusdItem: any;
+
+	private debouncedAutoPreview = debounce(() => {
+		this.autoPreviewFocusedItem();
+	}, 150);
 
 	constructor(
 		cb: (state: any) => void,
@@ -1422,30 +1541,37 @@ class FloatSearchModal extends Modal {
 		this.searchLeaf.setPinned(true);
 		await this.searchLeaf.setViewState({
 			type: "search",
-			state: this.state,
+			state: { ...this.state, triggerBySelf: true },
 		});
 
 		setTimeout(async () => {
-			await this.searchLeaf.view.setState(this.state, {
-				history: false,
-			});
-			this.state?.current
-				? (
-						this.searchLeaf.view as SearchView
-				  ).searchComponent.inputEl.setSelectionRange(0, 0)
-				: (
-						this.searchLeaf.view as SearchView
-				  ).searchComponent.inputEl.setSelectionRange(
-						0,
-						this.state?.query?.length
-				  );
+			await this.searchLeaf.view.setState(
+				{ ...this.state, triggerBySelf: true },
+				{ history: false }
+			);
+			const searchComponent = (this.searchLeaf.view as SearchView)
+				.searchComponent;
+			if (searchComponent?.inputEl) {
+				this.state?.current
+					? searchComponent.inputEl.setSelectionRange(0, 0)
+					: searchComponent.inputEl.setSelectionRange(
+							0,
+							this.state?.query?.length
+					  );
+			}
 		}, 0);
 
 		return;
 	}
 
-	initInput() {
+	initInput(retries = 10) {
 		const inputEl = this.contentEl.getElementsByTagName("input")[0];
+		if (!inputEl) {
+			if (retries > 0) {
+				setTimeout(() => this.initInput(retries - 1), 50);
+			}
+			return;
+		}
 		inputEl.focus();
 		inputEl.onkeydown = (e) => {
 			const currentView = this.searchLeaf.view as SearchView;
@@ -1466,6 +1592,7 @@ class FloatSearchModal extends Modal {
 					} else {
 						currentView.onKeyArrowDownInFocus(e);
 						this.focusdItem = currentView.dom.focusedItem;
+						this.debouncedAutoPreview();
 					}
 					break;
 				case "ArrowUp":
@@ -1487,6 +1614,7 @@ class FloatSearchModal extends Modal {
 						if (!currentView.dom.focusedItem.content) {
 							this.focusdItem = undefined;
 						}
+						this.debouncedAutoPreview();
 					}
 					break;
 				case "ArrowLeft":
@@ -1565,7 +1693,7 @@ class FloatSearchModal extends Modal {
 							setTimeout(() => {
 								(
 									this.searchLeaf.view as SearchView
-								).searchComponent.inputEl.focus();
+								).searchComponent?.inputEl?.focus();
 							}, 0);
 						}
 					}
@@ -1587,6 +1715,30 @@ class FloatSearchModal extends Modal {
 					break;
 			}
 		};
+	}
+
+	private autoPreviewFocusedItem() {
+		const currentView = this.searchLeaf.view as SearchView;
+		const item = currentView.dom?.focusedItem;
+		if (!item) return;
+
+		const file =
+			item.parent?.file instanceof TFile
+				? item.parent.file
+				: item.file;
+		if (!(file instanceof TFile)) return;
+
+		const state =
+			item.parent?.file instanceof TFile
+				? {
+						match: {
+							content: item.content,
+							matches: item.matches,
+						},
+				  }
+				: undefined;
+
+		this.initFileView(file, state);
 	}
 
 	initContent() {
@@ -1652,7 +1804,7 @@ class FloatSearchModal extends Modal {
 						this.initFileView(file, undefined);
 						(
 							this.searchLeaf.view as SearchView
-						).searchComponent.inputEl.focus();
+						).searchComponent?.inputEl?.focus();
 					}
 				}
 
@@ -1686,7 +1838,7 @@ class FloatSearchModal extends Modal {
 				setTimeout(() => {
 					(
 						this.searchLeaf.view as SearchView
-					).searchComponent.inputEl.focus();
+					).searchComponent?.inputEl?.focus();
 				}, 0);
 			}
 
@@ -1705,7 +1857,7 @@ class FloatSearchModal extends Modal {
 
 				(
 					this.searchLeaf.view as SearchView
-				).searchComponent.inputEl.focus();
+				).searchComponent?.inputEl?.focus();
 			}
 
 			if (e.key === "Tab" && e.ctrlKey) {
@@ -1714,7 +1866,7 @@ class FloatSearchModal extends Modal {
 
 				(
 					this.searchLeaf.view as SearchView
-				).searchComponent.inputEl.focus();
+				).searchComponent?.inputEl?.focus();
 			}
 		};
 
@@ -1734,6 +1886,278 @@ class FloatSearchModal extends Modal {
 		});
 		this.fileState = state;
 
-		(this.searchLeaf.view as SearchView).searchComponent.inputEl.focus();
+		(this.searchLeaf.view as SearchView).searchComponent?.inputEl?.focus();
+	}
+}
+
+interface CmdkResult {
+	file: TFile;
+	nameMatch: SearchResult | null;
+	pathMatch: SearchResult | null;
+	heading?: string;
+	headingMatch?: SearchResult | null;
+	type: "file" | "heading";
+}
+
+class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
+	plugin: FloatSearchPlugin;
+	private bodyEl: HTMLElement;
+	private previewEl: HTMLElement | undefined;
+	private fileLeaf: WorkspaceLeaf | undefined;
+	private fileEmbeddedView: EmbeddedView | undefined;
+	private searchAbort: AbortController | null = null;
+
+	constructor(plugin: FloatSearchPlugin) {
+		super(plugin.app);
+		this.plugin = plugin;
+		this.limit = 50;
+		this.setPlaceholder("Search files and content...");
+		this.setInstructions([
+			{ command: "↑↓", purpose: "Navigate" },
+			{ command: "↵", purpose: "Open" },
+			{ command: "Shift ↵", purpose: "New tab" },
+			{ command: "esc", purpose: "Close" },
+		]);
+		this.modalEl.addClass("float-search-cmdk");
+		this.containerEl.addClass("float-search-cmdk-container");
+	}
+
+	onOpen() {
+		super.onOpen();
+		this.bodyEl = createDiv("float-search-cmdk-body");
+		this.modalEl.insertBefore(
+			this.bodyEl,
+			(this as any).resultContainerEl
+		);
+		this.bodyEl.appendChild((this as any).resultContainerEl);
+	}
+
+	// Required by SuggestModal but unused — we drive the chooser directly
+	getSuggestions(_query: string): CmdkResult[] {
+		return [];
+	}
+
+	// Override to use progressive rendering via chooser.addSuggestion
+	updateSuggestions() {
+		// Cancel previous in-flight search
+		this.searchAbort?.abort();
+		const abort = (this.searchAbort = new AbortController());
+		const { signal } = abort;
+
+		const chooser = (this as any).chooser;
+		const query = this.inputEl.value;
+
+		const files = this.app.vault.getFiles().filter(
+			(f: TFile) =>
+				f.extension === "md" ||
+				f.extension === "canvas" ||
+				f.extension === "pdf"
+		);
+
+		// Empty query — show recent files
+		if (!query.trim()) {
+			const recent = files
+				.sort((a: TFile, b: TFile) => b.stat.mtime - a.stat.mtime)
+				.slice(0, this.limit)
+				.map((file: TFile) => ({
+					file,
+					nameMatch: null,
+					pathMatch: null,
+					type: "file" as const,
+				}));
+			chooser.setSuggestions(recent);
+			return;
+		}
+
+		// Phase 1: file name/path fuzzy (sync, instant)
+		const fuzzy = prepareFuzzySearch(query);
+		const fileResults: CmdkResult[] = [];
+
+		for (const file of files) {
+			const nameMatch = fuzzy(file.basename);
+			const pathMatch = fuzzy(file.path);
+			if (nameMatch || pathMatch) {
+				fileResults.push({
+					file,
+					nameMatch,
+					pathMatch,
+					type: "file",
+				});
+			}
+		}
+
+		fileResults.sort((a, b) => {
+			const sa = Math.max(
+				a.nameMatch?.score ?? -Infinity,
+				(a.pathMatch?.score ?? -Infinity) * 0.5
+			);
+			const sb = Math.max(
+				b.nameMatch?.score ?? -Infinity,
+				(b.pathMatch?.score ?? -Infinity) * 0.5
+			);
+			return sb - sa;
+		});
+
+		// Render file results immediately
+		chooser.setSuggestions(fileResults.slice(0, this.limit));
+
+		// Phase 2: heading search — progressive, batched via setTimeout
+		if (query.trim().length >= 2) {
+			this.progressiveHeadingSearch(
+				files,
+				fuzzy,
+				chooser,
+				signal
+			);
+		}
+	}
+
+	private progressiveHeadingSearch(
+		files: TFile[],
+		fuzzy: (text: string) => SearchResult | null,
+		chooser: any,
+		signal: AbortSignal
+	) {
+		const BATCH_SIZE = 50; // files per tick
+		let idx = 0;
+		let added = 0;
+		const MAX_HEADING_RESULTS = 20;
+
+		const processBatch = () => {
+			if (signal.aborted) return;
+
+			const end = Math.min(idx + BATCH_SIZE, files.length);
+			for (; idx < end; idx++) {
+				if (added >= MAX_HEADING_RESULTS) return;
+				const file = files[idx];
+				const cache =
+					this.app.metadataCache.getFileCache(file);
+				if (!cache?.headings) continue;
+
+				for (const h of cache.headings) {
+					const headingMatch = fuzzy(h.heading);
+					if (headingMatch) {
+						chooser.addSuggestion({
+							file,
+							nameMatch: null,
+							pathMatch: null,
+							heading: h.heading,
+							headingMatch,
+							type: "heading",
+						});
+						added++;
+						if (added >= MAX_HEADING_RESULTS) return;
+					}
+				}
+			}
+
+			// More files to process — yield to event loop
+			if (idx < files.length && added < MAX_HEADING_RESULTS) {
+				setTimeout(processBatch, 0);
+			}
+		};
+
+		// Start first batch on next microtask so file results render first
+		setTimeout(processBatch, 0);
+	}
+
+	renderSuggestion(result: CmdkResult, el: HTMLElement) {
+		el.addClass("mod-complex");
+		const contentEl = el.createDiv("suggestion-content");
+
+		if (result.type === "heading" && result.heading) {
+			const titleEl = contentEl.createDiv("suggestion-title");
+			if (result.headingMatch) {
+				renderResults(titleEl, result.heading, result.headingMatch);
+			} else {
+				titleEl.setText(result.heading);
+			}
+			const noteEl = contentEl.createDiv("suggestion-note");
+			noteEl.setText(result.file.path);
+		} else {
+			const titleEl = contentEl.createDiv("suggestion-title");
+			if (result.nameMatch) {
+				renderResults(
+					titleEl,
+					result.file.basename,
+					result.nameMatch
+				);
+			} else {
+				titleEl.setText(result.file.basename);
+			}
+
+			const noteEl = contentEl.createDiv("suggestion-note");
+			const parentPath = result.file.parent?.path || "/";
+			if (result.pathMatch) {
+				renderResults(noteEl, parentPath, result.pathMatch);
+			} else {
+				noteEl.setText(parentPath);
+			}
+		}
+
+		if (result.file.extension !== "md") {
+			el.createDiv("suggestion-aux")
+				.createSpan("suggestion-flair")
+				.setText(result.file.extension);
+		}
+	}
+
+	onChooseSuggestion(
+		result: CmdkResult,
+		evt: MouseEvent | KeyboardEvent
+	) {
+		const leaf = Keymap.isModEvent(evt)
+			? this.app.workspace.getLeaf("tab")
+			: this.app.workspace.getMostRecentLeaf() ??
+				this.app.workspace.getLeaf();
+
+		const eState: Record<string, any> = {};
+		if (result.type === "heading" && result.heading) {
+			// Use subpath to jump to heading
+			eState.subpath = "#" + result.heading;
+		}
+
+		leaf.setViewState({
+			type: result.file.extension === "pdf" ? "pdf" : "markdown",
+			state: { file: result.file.path },
+			active: true,
+		}).then(() => {
+			if (eState.subpath) {
+				// Apply eState after view is ready
+				leaf.setEphemeralState(eState);
+			}
+		});
+	}
+
+	// Called by internal Chooser on selection change
+	// @ts-ignore
+	onSelectedChange = debounce(
+		(result: CmdkResult, _evt: Event | null) => {
+			if (result?.file) this.showPreview(result.file);
+		},
+		100
+	);
+
+	async showPreview(file: TFile) {
+		if (!this.previewEl) {
+			this.previewEl = this.bodyEl.createDiv(
+				"float-search-cmdk-preview"
+			);
+			this.modalEl.addClass("float-search-cmdk-expanded");
+			const [leaf, view] = spawnLeafView(
+				this.plugin,
+				this.previewEl
+			);
+			this.fileLeaf = leaf;
+			this.fileEmbeddedView = view;
+			this.fileLeaf.setPinned(true);
+		}
+		await this.fileLeaf!.openFile(file, { active: false });
+		this.inputEl.focus();
+	}
+
+	onClose() {
+		this.fileLeaf?.detach();
+		this.fileEmbeddedView?.unload();
 	}
 }
