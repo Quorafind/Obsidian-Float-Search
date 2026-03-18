@@ -12,6 +12,7 @@ import {
 	PaneType,
 	Plugin,
 	prepareFuzzySearch,
+	prepareSimpleSearch,
 	renderResults,
 	SearchResult,
 	requireApiVersion,
@@ -1896,7 +1897,10 @@ interface CmdkResult {
 	pathMatch: SearchResult | null;
 	heading?: string;
 	headingMatch?: SearchResult | null;
-	type: "file" | "heading";
+	content?: string;
+	contentMatch?: SearchResult | null;
+	line?: number;
+	type: "file" | "heading" | "content";
 }
 
 class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
@@ -2009,6 +2013,14 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 				chooser,
 				signal
 			);
+
+			// Phase 3: content search — progressive, async (reads file content)
+			this.progressiveContentSearch(
+				files,
+				query,
+				chooser,
+				signal
+			);
 		}
 	}
 
@@ -2061,11 +2073,96 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 		setTimeout(processBatch, 0);
 	}
 
+	private progressiveContentSearch(
+		files: TFile[],
+		query: string,
+		chooser: any,
+		signal: AbortSignal
+	) {
+		const BATCH_SIZE = 50;
+		const MAX_CONTENT_RESULTS = 20;
+		const DURATION_LIMIT = 5; // ms before yielding
+		const simpleSearch = prepareSimpleSearch(query);
+		let idx = 0;
+		let added = 0;
+
+		const processBatch = async () => {
+			if (signal.aborted) return;
+			const start = performance.now();
+
+			for (; idx < files.length; idx++) {
+				if (signal.aborted || added >= MAX_CONTENT_RESULTS) return;
+
+				// Adaptive yielding: check time every BATCH_SIZE items
+				if (idx % BATCH_SIZE === 0 && idx > 0) {
+					if (performance.now() - start > DURATION_LIMIT) {
+						setTimeout(processBatch, 0);
+						return;
+					}
+				}
+
+				const file = files[idx];
+				if (file.extension !== "md") continue;
+
+				let text: string;
+				try {
+					text = await this.app.vault.cachedRead(file);
+				} catch {
+					continue;
+				}
+
+				const result = simpleSearch(text);
+				if (!result) continue;
+
+				// Compute line number and context from first match offset
+				const matchStart = result.matches[0][0];
+				let line = 0;
+				let lineStart = 0;
+				for (let i = 0; i < matchStart; i++) {
+					if (text.charCodeAt(i) === 10) {
+						line++;
+						lineStart = i + 1;
+					}
+				}
+				let lineEnd = text.indexOf("\n", lineStart);
+				if (lineEnd === -1) lineEnd = text.length;
+				const lineText = text.substring(lineStart, lineEnd).trim();
+
+				// Recompute match on the line for highlight offsets
+				const lineMatch = simpleSearch(lineText);
+
+				chooser.addSuggestion({
+					file,
+					nameMatch: null,
+					pathMatch: null,
+					content: lineText,
+					contentMatch: lineMatch,
+					line,
+					type: "content",
+				} as CmdkResult);
+				added++;
+				if (added >= MAX_CONTENT_RESULTS) return;
+			}
+		};
+
+		// Start after heading search has a chance to render
+		setTimeout(processBatch, 50);
+	}
+
 	renderSuggestion(result: CmdkResult, el: HTMLElement) {
 		el.addClass("mod-complex");
 		const contentEl = el.createDiv("suggestion-content");
 
-		if (result.type === "heading" && result.heading) {
+		if (result.type === "content" && result.content) {
+			const titleEl = contentEl.createDiv("suggestion-title");
+			if (result.contentMatch) {
+				renderResults(titleEl, result.content, result.contentMatch);
+			} else {
+				titleEl.setText(result.content);
+			}
+			const noteEl = contentEl.createDiv("suggestion-note");
+			noteEl.setText(result.file.path);
+		} else if (result.type === "heading" && result.heading) {
 			const titleEl = contentEl.createDiv("suggestion-title");
 			if (result.headingMatch) {
 				renderResults(titleEl, result.heading, result.headingMatch);
@@ -2113,8 +2210,9 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 
 		const eState: Record<string, any> = {};
 		if (result.type === "heading" && result.heading) {
-			// Use subpath to jump to heading
 			eState.subpath = "#" + result.heading;
+		} else if (result.type === "content" && result.line != null) {
+			eState.line = result.line;
 		}
 
 		leaf.setViewState({
@@ -2122,8 +2220,7 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			state: { file: result.file.path },
 			active: true,
 		}).then(() => {
-			if (eState.subpath) {
-				// Apply eState after view is ready
+			if (eState.subpath || eState.line != null) {
 				leaf.setEphemeralState(eState);
 			}
 		});
@@ -2133,12 +2230,12 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 	// @ts-ignore
 	onSelectedChange = debounce(
 		(result: CmdkResult, _evt: Event | null) => {
-			if (result?.file) this.showPreview(result.file);
+			if (result?.file) this.showPreview(result);
 		},
 		100
 	);
 
-	async showPreview(file: TFile) {
+	async showPreview(result: CmdkResult) {
 		if (!this.previewEl) {
 			this.previewEl = this.bodyEl.createDiv(
 				"float-search-cmdk-preview"
@@ -2152,7 +2249,26 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			this.fileEmbeddedView = view;
 			this.fileLeaf.setPinned(true);
 		}
+
+		const file = result.file;
 		await this.fileLeaf!.openFile(file, { active: false });
+
+		const eState: Record<string, any> = {};
+		if (result.type === "heading" && result.heading) {
+			eState.subpath = "#" + result.heading;
+		} else if (result.type === "content" && result.line != null) {
+			eState.line = result.line;
+		}
+
+		if (eState.subpath || eState.line != null) {
+			this.fileLeaf!.setViewState({
+				type: file.extension === "pdf" ? "pdf" : "markdown",
+				state: { file: file.path },
+			}).then(() => {
+				this.fileLeaf?.setEphemeralState(eState);
+			});
+		}
+
 		this.inputEl.focus();
 	}
 
