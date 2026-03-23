@@ -68,6 +68,9 @@ interface FloatSearchSettings {
 	defaultViewType: searchType;
 	cmdkTriggerKey: CmdkTriggerKey;
 	cmdkDoubleTapInterval: number;
+	cmdkQuickCreate: boolean;
+	cmdkQuickCreateFolder: string;
+	cmdkQuickCreateTitleFormat: string;
 }
 
 const DEFAULT_SETTINGS: FloatSearchSettings = {
@@ -84,6 +87,9 @@ const DEFAULT_SETTINGS: FloatSearchSettings = {
 	defaultViewType: "modal",
 	cmdkTriggerKey: "Shift",
 	cmdkDoubleTapInterval: 300,
+	cmdkQuickCreate: false,
+	cmdkQuickCreateFolder: "",
+	cmdkQuickCreateTitleFormat: "YYYYMMDDHHmmss",
 };
 
 const allViews: viewType[] = [
@@ -1378,6 +1384,54 @@ class FloatSearchSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+
+		containerEl.createEl("h3", { text: "Quick Create" });
+
+		new Setting(containerEl)
+			.setName("Enable quick create")
+			.setDesc(
+				"When no exact match is found in quick search, show an option to create a new note with the search text as content."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.cmdkQuickCreate)
+					.onChange(async (value) => {
+						this.plugin.settings.cmdkQuickCreate = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Quick create folder")
+			.setDesc(
+				"Folder to create new notes in. Leave empty for vault root."
+			)
+			.addText((text) => {
+				text.setPlaceholder("e.g. Inbox")
+					.setValue(this.plugin.settings.cmdkQuickCreateFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.cmdkQuickCreateFolder =
+							value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Title format")
+			.setDesc(
+				"Timestamp format for the note title. Tokens: YYYY, MM, DD, HH, mm, ss."
+			)
+			.addText((text) => {
+				text.setPlaceholder("YYYYMMDDHHmmss")
+					.setValue(
+						this.plugin.settings.cmdkQuickCreateTitleFormat
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.cmdkQuickCreateTitleFormat =
+							value;
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 }
 
@@ -1900,7 +1954,8 @@ interface CmdkResult {
 	content?: string;
 	contentMatch?: SearchResult | null;
 	line?: number;
-	type: "file" | "heading" | "content";
+	type: "file" | "heading" | "content" | "create";
+	createQuery?: string;
 }
 
 class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
@@ -2002,8 +2057,31 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			return sb - sa;
 		});
 
+		// Check if there is an exact name match (for quick-create gating)
+		const queryLower = query.trim().toLowerCase();
+		const hasExactMatch = fileResults.some(
+			(r) => r.file.basename.toLowerCase() === queryLower
+		);
+
+		const resultsToShow = fileResults.slice(0, this.limit);
+
+		// Append "quick create" option when enabled and no exact match
+		if (
+			this.plugin.settings.cmdkQuickCreate &&
+			!hasExactMatch &&
+			query.trim().length > 0
+		) {
+			resultsToShow.push({
+				file: null as any,
+				nameMatch: null,
+				pathMatch: null,
+				type: "create",
+				createQuery: query.trim(),
+			});
+		}
+
 		// Render file results immediately
-		chooser.setSuggestions(fileResults.slice(0, this.limit));
+		chooser.setSuggestions(resultsToShow);
 
 		// Phase 2: heading search — progressive, batched via setTimeout
 		if (query.trim().length >= 2) {
@@ -2151,6 +2229,24 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 
 	renderSuggestion(result: CmdkResult, el: HTMLElement) {
 		el.addClass("mod-complex");
+
+		if (result.type === "create") {
+			el.addClass("float-search-cmdk-create-item");
+			const contentEl = el.createDiv("suggestion-content");
+			const titleEl = contentEl.createDiv("suggestion-title");
+			titleEl.setText("Create new note");
+			const noteEl = contentEl.createDiv("suggestion-note");
+			const folder =
+				this.plugin.settings.cmdkQuickCreateFolder || "/";
+			noteEl.setText(
+				`"${result.createQuery}" → ${folder}`
+			);
+			const auxEl = el.createDiv("suggestion-aux");
+			const flair = auxEl.createSpan("suggestion-flair");
+			setIcon(flair, "plus");
+			return;
+		}
+
 		const contentEl = el.createDiv("suggestion-content");
 
 		if (result.type === "content" && result.content) {
@@ -2203,6 +2299,11 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 		result: CmdkResult,
 		evt: MouseEvent | KeyboardEvent
 	) {
+		if (result.type === "create") {
+			this.quickCreateNote(result.createQuery ?? "", evt);
+			return;
+		}
+
 		const leaf = Keymap.isModEvent(evt)
 			? this.app.workspace.getLeaf("tab")
 			: this.app.workspace.getMostRecentLeaf() ??
@@ -2226,21 +2327,90 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 		});
 	}
 
+	private async quickCreateNote(
+		content: string,
+		evt: MouseEvent | KeyboardEvent
+	) {
+		const settings = this.plugin.settings;
+		const fmt = settings.cmdkQuickCreateTitleFormat || "YYYYMMDDHHmmss";
+		const title = this.formatTimestamp(new Date(), fmt);
+
+		// Resolve target folder
+		let folderPath = settings.cmdkQuickCreateFolder.trim();
+		if (!folderPath || folderPath === "/") {
+			folderPath = "";
+		}
+		// Ensure folder exists
+		if (folderPath) {
+			const folder =
+				this.app.vault.getAbstractFileByPath(folderPath);
+			if (!folder) {
+				await this.app.vault.createFolder(folderPath);
+			}
+		}
+
+		const filePath = folderPath
+			? `${folderPath}/${title}.md`
+			: `${title}.md`;
+
+		const file = await this.app.vault.create(filePath, content);
+
+		const leaf = Keymap.isModEvent(evt)
+			? this.app.workspace.getLeaf("tab")
+			: this.app.workspace.getMostRecentLeaf() ??
+				this.app.workspace.getLeaf();
+
+		await leaf.setViewState({
+			type: "markdown",
+			state: { file: file.path },
+			active: true,
+		});
+	}
+
+	private formatTimestamp(date: Date, fmt: string): string {
+		const pad = (n: number, len = 2) =>
+			String(n).padStart(len, "0");
+		const tokens: Record<string, string> = {
+			YYYY: String(date.getFullYear()),
+			YY: String(date.getFullYear()).slice(-2),
+			MM: pad(date.getMonth() + 1),
+			DD: pad(date.getDate()),
+			HH: pad(date.getHours()),
+			mm: pad(date.getMinutes()),
+			ss: pad(date.getSeconds()),
+		};
+		let result = fmt;
+		// Replace longest tokens first to avoid partial matches
+		for (const token of ["YYYY", "YY", "MM", "DD", "HH", "mm", "ss"]) {
+			result = result.split(token).join(tokens[token]);
+		}
+		return result;
+	}
+
 	// Called by internal Chooser on selection change
 	// @ts-ignore
 	onSelectedChange = debounce(
 		(result: CmdkResult, _evt: Event | null) => {
-			if (result?.file) this.showPreview(result);
+			if (result?.type === "create" || !result?.file) {
+				this.hidePreview();
+			} else {
+				this.showPreview(result);
+			}
 		},
 		100
 	);
+
+	private hidePreview() {
+		if (this.previewEl) {
+			this.previewEl.hide();
+		}
+	}
 
 	async showPreview(result: CmdkResult) {
 		if (!this.previewEl) {
 			this.previewEl = this.bodyEl.createDiv(
 				"float-search-cmdk-preview"
 			);
-			this.modalEl.addClass("float-search-cmdk-expanded");
 			const [leaf, view] = spawnLeafView(
 				this.plugin,
 				this.previewEl
@@ -2249,6 +2419,9 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			this.fileEmbeddedView = view;
 			this.fileLeaf.setPinned(true);
 		}
+
+		this.previewEl.show();
+		this.modalEl.addClass("float-search-cmdk-expanded");
 
 		const file = result.file;
 		await this.fileLeaf!.openFile(file, { active: false });

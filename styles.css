@@ -213,3 +213,19 @@ body:not(.show-file-path) .search-result-file-title .search-result-file-path {
 .modal-container.float-search-cmdk-container.mod-dim {
 	z-index: 30;
 }
+
+/* ── Quick Create item ── */
+.float-search-cmdk-create-item {
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.float-search-cmdk-create-item .suggestion-title {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+}
+
+.float-search-cmdk-create-item .suggestion-flair {
+	display: flex;
+	align-items: center;
+	color: var(--text-accent);
+}
