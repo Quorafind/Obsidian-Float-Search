@@ -1629,6 +1629,9 @@ class FloatSearchModal extends Modal {
 		}
 		inputEl.focus();
 		inputEl.onkeydown = (e) => {
+			if (e.isComposing || e.key === "Process" || e.keyCode === 229) {
+				return;
+			}
 			const currentView = this.searchLeaf.view as SearchView;
 			switch (e.key) {
 				case "ArrowDown":
@@ -1965,6 +1968,14 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 	private fileLeaf: WorkspaceLeaf | undefined;
 	private fileEmbeddedView: EmbeddedView | undefined;
 	private searchAbort: AbortController | null = null;
+	private isComposing = false;
+	private readonly onCompositionStart = () => {
+		this.isComposing = true;
+		this.hidePreview();
+	};
+	private readonly onCompositionEnd = () => {
+		this.isComposing = false;
+	};
 
 	constructor(plugin: FloatSearchPlugin) {
 		super(plugin.app);
@@ -1989,6 +2000,14 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			(this as any).resultContainerEl
 		);
 		this.bodyEl.appendChild((this as any).resultContainerEl);
+		this.inputEl.addEventListener(
+			"compositionstart",
+			this.onCompositionStart
+		);
+		this.inputEl.addEventListener(
+			"compositionend",
+			this.onCompositionEnd
+		);
 	}
 
 	// Required by SuggestModal but unused — we drive the chooser directly
@@ -2391,13 +2410,18 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 	// @ts-ignore
 	onSelectedChange = debounce(
 		(result: CmdkResult, _evt: Event | null) => {
+			if (this.isComposing) {
+				this.hidePreview();
+				return;
+			}
+
 			if (result?.type === "create" || !result?.file) {
 				this.hidePreview();
 			} else {
 				this.showPreview(result);
 			}
 		},
-		100
+		200
 	);
 
 	private hidePreview() {
@@ -2442,10 +2466,21 @@ class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			});
 		}
 
-		this.inputEl.focus();
+		if (!this.isComposing && document.activeElement !== this.inputEl) {
+			this.inputEl.focus();
+		}
 	}
 
 	onClose() {
+		this.inputEl.removeEventListener(
+			"compositionstart",
+			this.onCompositionStart
+		);
+		this.inputEl.removeEventListener(
+			"compositionend",
+			this.onCompositionEnd
+		);
+		this.isComposing = false;
 		this.fileLeaf?.detach();
 		this.fileEmbeddedView?.unload();
 	}

@@ -521,7 +521,9 @@ export class EmbeddedView extends nosuper(HoverPopover) {
 			this.opening = false;
 			if (this.detaching) this.hide();
 		}
-		this.plugin.app.workspace.setActiveLeaf(leaf);
+		if (openState?.active !== false) {
+			this.plugin.app.workspace.setActiveLeaf(leaf);
+		}
 
 		return leaf;
 	}
