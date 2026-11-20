@@ -157,6 +157,8 @@ declare module "obsidian" {
 
 		updateHeader(): void;
 
+		rebuildView(): void;
+
 		containerEl: HTMLDivElement;
 		working: boolean;
 		parentSplit: WorkspaceParent;

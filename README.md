@@ -18,18 +18,20 @@ You can use search view in modal now.
     - When a search result is selected, hold the Shift key and press the up or down arrow keys to expand the results upwards or downwards; when focused on a file name, you can collapse the search results under the current file name;
     - When a search result is selected,
         - Press Enter to open the file in the background;
-        - Press Ctrl+Enter to open a new page in the background and open the file;
+        - Press Ctrl+Enter (Cmd+Enter on macOS) to open the file in a new tab in the background, the popup stays open;
         - Press Alt+Enter to open the file and close the popup;
         - Press Ctrl+Shift+Alt+Enter to open the file in a new window and close the popup;
-    - When a search result is selected, press Tab to preview the corresponding file in the current popup's right side, and Shift+Tab to close the preview;
+    - When a search result is selected, press Tab to preview the corresponding file in the current popup's right side, and Shift+Tab to close the preview. In sidebar/tab/window search views the preview shows below the results. With "Preview while navigating" on (settings), the preview follows the arrow keys;
     - When a search result is focused, press Ctrl+Shift+C to copy the selected search result content;
     - When a file is being previewed, press Ctrl+E to toggle the file's reading mode;
     - When a file is being previewed, press Ctrl+G to jump from the input box to the content of the previewed file, or from the previewed file content back to the input box;
-    - When a file is being previewed, press Tab twice to jump into the content of the previewed file, or use Ctrl+Tab to switch back to the input box from the previewed file.
+    - When a file is being previewed, press Tab again to jump into the content of the previewed file; press Esc, Shift+Tab or Ctrl+Tab to switch back to the input box from the previewed file.
 3. **Mouse click behavior**:
     - When a file is being previewed:
         - Clicking a new search result with the mouse will not automatically close the popup, but instead switch the file in the preview window;
         - Use Alt+mouse click to open the file and close the popup;
+    - Ctrl+click (Cmd+click on macOS) or middle click opens the result in a new tab in the background and keeps the popup open;
+    - Moving the mouse over a result focuses it, so the arrow keys and Enter continue from there (setting: "Focus result under the mouse");
     - When no file is being previewed:
         - Clicking a search result with the mouse will automatically close the popup and navigate to the file, and other behavior is the same as Obsidian's default behavior;
 4. **The right-click context menu can quickly search the selected text**;
@@ -47,18 +49,20 @@ You can use search view in modal now.
     - 当有一个搜索结果被选择时，按住 Shift 键再按上下方向键来向上展开或者向下展开结果；当聚焦在文件名上的时候，可以折叠当前文件名下的搜索结果；
     - 当有一个搜索结果被选择时，
         - 按 Enter 来在背景中打开文件；
-        - 按 Ctrl+Enter 则是在背景中打开新页面且打开文件；
+        - 按 Ctrl+Enter（macOS 为 Cmd+Enter）则是在后台新标签页中打开文件，弹窗保持打开；
         - 按 Alt+Enter 则是打开该文件且关闭弹窗；
         - 按 Ctrl+Shift+Alt+Enter 则是用新窗口打开该文件，且关闭弹窗；
-    - 当有一个搜索结果被选择时，按 Tab 来在当前弹窗的右侧预览对应的文件，Shift+Tab 则是关闭预览；
+    - 当有一个搜索结果被选择时，按 Tab 来在当前弹窗的右侧预览对应的文件，Shift+Tab 则是关闭预览。在侧边栏/标签页/窗口中的搜索视图里，预览显示在结果下方。开启设置中的「Preview while navigating」后，预览会跟随方向键切换；
     - 当有一个搜索结果被聚焦时，按 Ctrl+Shift+C 来复制选中的搜索结果内容；
     - 当有一个文件正在被预览时，按 Ctrl+E 来切换文件的阅读模式；
     - 当有一个文件正在被预览时，按 Ctrl+G 来从输入框跳转到预览文件的内容中，或从预览文件内容中跳转回输入框；
-    - 当有一个文件正在被预览时，按两次 Tab 来跳转到预览文件的内容中，或用 Ctrl+Tab 从预览文件中跳转回输入框；
+    - 当有一个文件正在被预览时，再按一次 Tab 跳转到预览文件的内容中；在预览中按 Esc、Shift+Tab 或 Ctrl+Tab 跳转回输入框；
 3. **鼠标点击的行为**：
     - 当存在文件在预览中时：
         - 用鼠标点击新的搜索结果不会再自动关闭弹窗，而是在切换预览文件窗口的文件；
         - 用 Alt+鼠标来打开文件且关闭弹窗；
+    - Ctrl+点击（macOS 为 Cmd+点击）或鼠标中键：在后台新标签页中打开结果，弹窗保持打开；
+    - 鼠标移到某条结果上即聚焦该结果，方向键和 Enter 会从这里继续（设置项「Focus result under the mouse」）；
     - 当不存在文件在预览中时：
         - 用鼠标点击搜索结果自动关闭弹窗且跳转文件夹，其它与 Obsidian 的默认行为一样；
 4. **右键菜单可以快速搜索选中的文本**；

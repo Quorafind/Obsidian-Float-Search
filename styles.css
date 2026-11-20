@@ -8,6 +8,7 @@ If your plugin does not need CSS, delete this file.
 */
 .float-search-modal {
 	width: 700px;
+	max-width: 100%;
 	padding-bottom: 0;
 	transition: width 0.15s ease;
 }
@@ -27,10 +28,21 @@ If your plugin does not need CSS, delete this file.
 }
 
 .float-search-modal-content {
-	height: 800px;
+	height: min(800px, 75vh);
 	display: flex;
 	align-items: center;
 	flex-direction: row;
+}
+
+.is-phone .float-search-modal-content {
+	flex-direction: column;
+	height: 100%;
+}
+
+.is-phone .float-search-modal-content:has(.float-search-modal-file-ctn)
+	.float-search-modal-search-ctn,
+.is-phone .float-search-modal-file-ctn {
+	height: 50%;
 }
 
 .float-search-modal-file-ctn .view-content {
@@ -228,4 +240,35 @@ body:not(.show-file-path) .search-result-file-title .search-result-file-path {
 	display: flex;
 	align-items: center;
 	color: var(--text-accent);
+}
+
+/* ── Tab preview in sidebar / tab / window search views ── */
+.workspace-leaf-content.float-search-has-preview .search-result-container {
+	flex: 1 1 50%;
+	min-height: 0;
+}
+
+.float-search-native-preview {
+	flex: 1 1 50%;
+	min-height: 0;
+	overflow: hidden;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.float-search-native-preview .view-header {
+	display: none;
+}
+
+.float-search-native-preview .fs-content,
+.float-search-native-preview .fs-content .workspace-split.mod-vertical,
+.float-search-native-preview .view-content {
+	height: 100%;
+}
+
+.float-search-native-preview:has(.mod-active) {
+	border-top-color: var(--color-accent);
+}
+
+.is-phone .float-search-modal-instructions {
+	display: none;
 }
