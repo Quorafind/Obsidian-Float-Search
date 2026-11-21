@@ -1,4 +1,4 @@
-# Obsidian Float Search
+# Floating Search
 
 You can use search view in modal now.
 
