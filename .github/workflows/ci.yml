@@ -1,0 +1,32 @@
+name: CI
+
+# Obsidian's official checks for the community directory: manifest, README,
+# license, build, and the review scanner's ESLint and Stylelint rulesets.
+# Run them before tagging a release, so it doesn't fail the directory review.
+on:
+    push:
+        branches: [ master ]
+    pull_request:
+        branches: [ master ]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v7
+            # pnpm-lock.yaml makes the action install with pnpm.
+            -   uses: pnpm/action-setup@v6
+                with:
+                    version: 9
+            -   uses: actions/setup-node@v7
+                with:
+                    node-version: 24
+            -   uses: obsidianmd/obsidian-workflows@v1
+                with:
+                    scanner-lint: true
+                    # Fail on any finding instead of only reporting it.
+                    strict: true
