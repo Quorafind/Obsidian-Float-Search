@@ -105,7 +105,8 @@ export const TRIGGER_KEY_OPTIONS: Record<CmdkTriggerKey, string> = {
 	none: "Disabled",
 };
 
-export interface CmdkResult {
+/** A file, heading or content match in quick search. */
+export interface CmdkFileResult {
 	file: TFile;
 	nameMatch: SearchResult | null;
 	pathMatch: SearchResult | null;
@@ -114,6 +115,13 @@ export interface CmdkResult {
 	content?: string;
 	contentMatch?: SearchResult | null;
 	line?: number;
-	type: "file" | "heading" | "content" | "create";
-	createQuery?: string;
+	type: "file" | "heading" | "content";
 }
+
+/** The "Create new note" entry of quick search. */
+export interface CmdkCreateResult {
+	type: "create";
+	createQuery: string;
+}
+
+export type CmdkResult = CmdkFileResult | CmdkCreateResult;

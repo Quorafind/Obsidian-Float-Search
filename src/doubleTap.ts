@@ -1,6 +1,9 @@
 import type { CmdkTriggerKey } from "./floatSearchTypes";
 
-const MODIFIER_FLAGS: Record<Exclude<CmdkTriggerKey, "none">, keyof KeyboardEvent> = {
+const MODIFIER_FLAGS: Record<
+	Exclude<CmdkTriggerKey, "none">,
+	"shiftKey" | "ctrlKey" | "altKey" | "metaKey"
+> = {
 	Shift: "shiftKey",
 	Control: "ctrlKey",
 	Alt: "altKey",

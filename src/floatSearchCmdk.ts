@@ -12,7 +12,7 @@ import {
 	WorkspaceLeaf,
 } from "obsidian";
 import type FloatSearchPlugin from "./floatSearchIndex";
-import type { CmdkResult } from "./floatSearchTypes";
+import type { CmdkFileResult, CmdkResult } from "./floatSearchTypes";
 import { PreviewPane } from "./previewPane";
 
 export type { CmdkResult };
@@ -132,7 +132,7 @@ export class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 
 		// Phase 1: file name / path fuzzy match (sync, instant)
 		const fuzzy = prepareFuzzySearch(query);
-		const fileResults: CmdkResult[] = [];
+		const fileResults: CmdkFileResult[] = [];
 		for (const file of files) {
 			const nameMatch = fuzzy(file.basename);
 			const pathMatch = fuzzy(file.path);
@@ -141,7 +141,7 @@ export class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			}
 		}
 
-		const score = (r: CmdkResult) =>
+		const score = (r: CmdkFileResult) =>
 			Math.max(
 				r.nameMatch?.score ?? -Infinity,
 				(r.pathMatch?.score ?? -Infinity) * 0.5
@@ -153,15 +153,9 @@ export class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 			(r) => r.file.basename.toLowerCase() === queryLower
 		);
 
-		const resultsToShow = fileResults.slice(0, this.limit);
+		const resultsToShow: CmdkResult[] = fileResults.slice(0, this.limit);
 		if (this.plugin.settings.cmdkQuickCreate && !hasExactMatch) {
-			resultsToShow.push({
-				file: null as unknown as TFile,
-				nameMatch: null,
-				pathMatch: null,
-				type: "create",
-				createQuery: trimmed,
-			});
+			resultsToShow.push({ type: "create", createQuery: trimmed });
 		}
 		chooser.setSuggestions(resultsToShow);
 
@@ -332,7 +326,7 @@ export class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 
 	onChooseSuggestion(result: CmdkResult, evt: MouseEvent | KeyboardEvent) {
 		if (result.type === "create") {
-			void this.quickCreateNote(result.createQuery ?? "", evt).catch((error) => {
+			void this.quickCreateNote(result.createQuery, evt).catch((error) => {
 				console.error("Float Search: failed to create note from quick search", error);
 			});
 			return;
@@ -414,7 +408,7 @@ export class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 	onSelectedChange = debounce(
 		(result: CmdkResult | undefined, _evt: Event | null) => {
 			if (this.isClosed || this.composing) return;
-			if (!result || result.type === "create" || !result.file) {
+			if (!result || result.type === "create") {
 				this.hidePreview();
 				return;
 			}
@@ -431,7 +425,7 @@ export class FloatSearchCmdkModal extends SuggestModal<CmdkResult> {
 		this.modalEl.removeClass("float-search-cmdk-expanded");
 	}
 
-	private async showPreview(result: CmdkResult) {
+	private async showPreview(result: CmdkFileResult) {
 		if (!this.preview) {
 			this.preview = new PreviewPane(
 				this.plugin,

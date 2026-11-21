@@ -1,4 +1,5 @@
-import { TFile, WorkspaceLeaf } from "obsidian";
+import { EventRef, TFile, WorkspaceLeaf } from "obsidian";
+import { getActiveLeaf } from "./activeLeaf";
 import { EmbeddedView, spawnLeafView } from "./leafView";
 import type FloatSearchPlugin from "./floatSearchIndex";
 
@@ -14,6 +15,7 @@ export class PreviewPane {
 	private leaf: WorkspaceLeaf | null = null;
 	private embeddedView: EmbeddedView | null = null;
 	private destroyed = false;
+	private readonly activeLeafRef: EventRef;
 
 	constructor(
 		private readonly plugin: FloatSearchPlugin,
@@ -21,6 +23,10 @@ export class PreviewPane {
 		cls: string
 	) {
 		this.el = parentEl.createDiv({ cls });
+		// Mark the pane while its leaf has focus (see .is-active in styles.css).
+		this.activeLeafRef = plugin.app.workspace.on("active-leaf-change", (leaf) => {
+			if (!this.destroyed) this.el.toggleClass("is-active", !!leaf && leaf === this.leaf);
+		});
 	}
 
 	get isDestroyed() {
@@ -44,14 +50,14 @@ export class PreviewPane {
 		if (this.destroyed) return false;
 		if (!this.leaf) {
 			const { workspace } = this.plugin.app;
-			const previouslyActive = workspace.activeLeaf;
+			const previouslyActive = getActiveLeaf(workspace);
 			const [leaf, view] = spawnLeafView(this.plugin, this.el);
 			leaf.setPinned(true);
 			this.leaf = leaf;
 			this.embeddedView = view;
 			// Creating the leaf made it active, which takes keyboard handling
 			// away from the search view that owns this preview.
-			if (previouslyActive && workspace.activeLeaf !== previouslyActive) {
+			if (previouslyActive && getActiveLeaf(workspace) !== previouslyActive) {
 				workspace.setActiveLeaf(previouslyActive, { focus: false });
 			}
 		}
@@ -84,6 +90,7 @@ export class PreviewPane {
 	destroy() {
 		if (this.destroyed) return;
 		this.destroyed = true;
+		this.plugin.app.workspace.offref(this.activeLeafRef);
 		this.key = null;
 		this.leaf?.detach();
 		this.embeddedView?.unload();

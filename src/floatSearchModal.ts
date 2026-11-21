@@ -1,4 +1,5 @@
 import { debounce, Keymap, Modal, Platform, SearchView, WorkspaceLeaf } from "obsidian";
+import { getActiveLeaf } from "./activeLeaf";
 import type FloatSearchPlugin from "./floatSearchIndex";
 import type { searchState } from "./floatSearchTypes";
 import { EmbeddedView, spawnLeafView } from "./leafView";
@@ -75,7 +76,7 @@ export class FloatSearchModal extends Modal {
 		private readonly onStateChange: (state: searchState) => void
 	) {
 		super(plugin.app);
-		const active = plugin.app.workspace.activeLeaf;
+		const active = getActiveLeaf(plugin.app.workspace);
 		this.anchorLeaf = isMainAreaLeaf(plugin.app, active) ? active : null;
 		// The modal's scope traps Tab for focus cycling before the input sees it,
 		// so preview handling has to be registered on the scope itself.
@@ -89,7 +90,7 @@ export class FloatSearchModal extends Modal {
 	}
 
 	private get dom(): SearchResultDom | null {
-		return (this.searchView?.dom as SearchResultDom | undefined) ?? null;
+		return this.searchView?.dom ?? null;
 	}
 
 	async onOpen() {

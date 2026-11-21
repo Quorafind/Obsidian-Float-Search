@@ -1,24 +1,21 @@
 {
 	"compilerOptions": {
-		"baseUrl": ".",
 		"module": "ESNext",
 		"target": "ES6",
-		"allowJs": true,
+		"moduleResolution": "bundler",
 		"noImplicitAny": true,
-		"moduleResolution": "node",
+		"strictNullChecks": true,
+		"strictBindCallApply": true,
 		"importHelpers": true,
 		"isolatedModules": true,
-		"strictNullChecks": true,
+		"types": [],
 		"lib": [
 			"DOM",
-			"ES5",
-			"ES6",
-			"ES7"
+			"DOM.Iterable",
+			"ES2021"
 		]
 	},
 	"include": [
-		"**/globals.d.ts",
-		"**/*.js",
-		"**/*.ts"
+		"src/**/*.ts"
 	]
 }

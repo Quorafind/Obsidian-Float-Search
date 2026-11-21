@@ -1,4 +1,5 @@
-import { App, TFile, WorkspaceLeaf, WorkspaceParent, WorkspaceSplit } from "obsidian";
+import { App, TFile, WorkspaceLeaf, WorkspaceParent } from "obsidian";
+import { getActiveLeaf } from "./activeLeaf";
 import { isEmebeddedLeaf } from "./leafView";
 
 type MatchRange = [number, number];
@@ -36,9 +37,16 @@ export interface ResolvedResult {
 	key: string;
 }
 
+/**
+ * The legacy `keyCode` of a key event. WebKit (Obsidian on iOS) fires the
+ * keydown that commits an IME composition after `compositionend`, with
+ * `isComposing` false and `key` "Enter": only its keyCode, 229, tells.
+ */
+type LegacyKeyCode = { readonly keyCode?: number };
+
 export function isComposingEvent(e: KeyboardEvent): boolean {
 	// keyCode 229 is what IMEs report while a composition is in progress.
-	return e.isComposing || e.key === "Process" || e.keyCode === 229;
+	return e.isComposing || e.key === "Process" || (e as LegacyKeyCode).keyCode === 229;
 }
 
 export function resolveResultItem(
@@ -100,12 +108,12 @@ function createInactiveLeaf(app: App, parent: WorkspaceParent, index: number): W
 			setDimension?(size: number): void;
 		};
 		const leaf = new LeafCtor(app);
-		const count = (parent as unknown as { children: unknown[] }).children.length;
+		const count = parent.children.length;
 		if (count > 0) leaf.setDimension?.(100 / count);
 		parent.insertChild(index, leaf);
 		return leaf;
 	} catch {
-		return app.workspace.createLeafInParent(parent as unknown as WorkspaceSplit, index);
+		return app.workspace.createLeafInParent(parent, index);
 	}
 }
 
@@ -125,14 +133,13 @@ export async function openInBackgroundTab(
 	anchorLeaf?: WorkspaceLeaf | null
 ): Promise<WorkspaceLeaf> {
 	const { workspace } = app;
-	const previouslyActive = workspace.activeLeaf;
+	const previouslyActive = getActiveLeaf(workspace);
 	const anchor = isMainAreaLeaf(app, anchorLeaf)
 		? anchorLeaf
 		: workspace.getMostRecentLeaf(workspace.rootSplit);
 	let leaf: WorkspaceLeaf;
 	if (anchor && !isEmebeddedLeaf(anchor) && anchor.parent) {
-		const parent = anchor.parent as unknown as WorkspaceParent & {
-			children: unknown[];
+		const parent = anchor.parent as WorkspaceParent & {
 			selectTab?(leaf: WorkspaceLeaf): void;
 		};
 		const index = parent.children.indexOf(anchor);
@@ -145,7 +152,7 @@ export async function openInBackgroundTab(
 		await leaf.openFile(file, { active: false, eState });
 	}
 	// Creating the leaf made it active; give the focus back.
-	if (previouslyActive && previouslyActive !== leaf && workspace.activeLeaf !== previouslyActive) {
+	if (previouslyActive && previouslyActive !== leaf && getActiveLeaf(workspace) !== previouslyActive) {
 		workspace.setActiveLeaf(previouslyActive, { focus: false });
 	}
 	return leaf;

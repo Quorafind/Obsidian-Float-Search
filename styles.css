@@ -39,8 +39,8 @@ If your plugin does not need CSS, delete this file.
 	height: 100%;
 }
 
-.is-phone .float-search-modal-content:has(.float-search-modal-file-ctn)
-	.float-search-modal-search-ctn,
+/* .float-search-width: the modal shows a preview. */
+.is-phone .float-search-modal.float-search-width .float-search-modal-search-ctn,
 .is-phone .float-search-modal-file-ctn {
 	height: 50%;
 }
@@ -66,7 +66,8 @@ If your plugin does not need CSS, delete this file.
 }
 
 .fs-block {
-	height: 100% !important;
+	height: 100%;
+	width: 100%;
 }
 
 .fs-block .workspace-leaf-resize-handle {
@@ -95,16 +96,16 @@ If your plugin does not need CSS, delete this file.
 	margin-right: var(--size-2-2);
 }
 
-.float-search-modal-content:has(.float-search-modal-file-ctn)
-	.float-search-modal-search-ctn {
+.float-search-modal.float-search-width .float-search-modal-search-ctn {
 	border-right: 1px solid var(--background-secondary);
 }
 
-.float-search-modal-file-ctn:has(.mod-active) {
+/* .is-active: the preview has focus. */
+.float-search-modal-file-ctn.is-active {
 	border-bottom: 3px solid var(--color-accent);
 }
 
-.float-search-modal-file-ctn:has(.mod-active) .cm-scroller {
+.float-search-modal-file-ctn.is-active .cm-scroller {
 	background-color: var(--background-primary);
 }
 
@@ -207,7 +208,7 @@ body:not(.show-file-path) .search-result-file-title .search-result-file-path {
 }
 
 .float-search-cmdk-preview .fs-block {
-	height: 100% !important;
+	height: 100%;
 }
 
 .float-search-cmdk-preview .fs-content {
@@ -265,10 +266,16 @@ body:not(.show-file-path) .search-result-file-title .search-result-file-path {
 	height: 100%;
 }
 
-.float-search-native-preview:has(.mod-active) {
+.float-search-native-preview.is-active {
 	border-top-color: var(--color-accent);
 }
 
 .is-phone .float-search-modal-instructions {
 	display: none;
+}
+
+.float-search-setting-value {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
 }

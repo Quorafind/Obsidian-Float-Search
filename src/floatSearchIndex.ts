@@ -15,12 +15,14 @@ import {
 	TAbstractFile,
 	TFile,
 	View,
+	ViewStateResult,
 	Workspace,
 	WorkspaceContainer,
 	WorkspaceItem,
 	WorkspaceLeaf,
 } from "obsidian";
 import { around } from "monkey-around";
+import { getActiveLeaf } from "./activeLeaf";
 import { EmbeddedView, isEmebeddedLeaf } from "./leafView";
 import { FloatSearchModal } from "./floatSearchModal";
 import { FloatSearchCmdkModal } from "./floatSearchCmdk";
@@ -53,8 +55,30 @@ interface SearchViewInternals {
 }
 
 type LeafIterator = (leaf: WorkspaceLeaf) => boolean | void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- patched internal methods
-type AnyFn = (...args: any[]) => any;
+
+/**
+ * The Workspace methods patched below, as the patches call them: they pass
+ * their arguments through whichever overload (or internal signature) they are for.
+ */
+interface WorkspacePatchTarget {
+	getLeaf(...args: Parameters<Workspace["getLeaf"]>): WorkspaceLeaf;
+	changeLayout(layout: unknown): Promise<void>;
+	iterateLeaves(arg1: unknown, arg2: unknown): boolean;
+	setActiveLeaf(leaf: WorkspaceLeaf, params?: unknown): void;
+	pushUndoHistory(leaf: WorkspaceLeaf, id: string, ...args: unknown[]): void;
+}
+
+/** The (internal) SearchView methods patched to remember the search options. */
+interface SearchViewPatchTarget {
+	onOpen(): Promise<void>;
+	setExplainSearch(value: boolean): void;
+	setCollapseAll(value: boolean): void;
+	setExtraContext(value: boolean): void;
+	setMatchingCase(value: boolean): void;
+	setSortOrder(value: string): void;
+	setQuery(value: string): void;
+	setState(state: unknown, result: ViewStateResult): Promise<void>;
+}
 
 const LEAF_SEARCH_TYPES: LeafSearchType[] = ["sidebar", "split", "tab", "window"];
 
@@ -104,8 +128,14 @@ export default class FloatSearchPlugin extends Plugin {
 			() => this.openSearch(this.state, { clearQuery: true })
 		);
 		this.updateFilePathVisibility();
+		this.registerEvent(
+			this.app.workspace.on("window-open", (_workspaceWindow, win) =>
+				this.applyFilePathVisibility(win.document)
+			)
+		);
 
 		this.app.workspace.onLayoutReady(() => {
+			this.updateFilePathVisibility();
 			registerIcons();
 			this.patchWorkspace();
 			this.patchWorkspaceLeaf();
@@ -118,7 +148,7 @@ export default class FloatSearchPlugin extends Plugin {
 	onunload() {
 		this.modal?.close();
 		this.cmdkModal?.close();
-		document.body.removeClass("show-file-path");
+		this.forEachWindowDocument((doc) => doc.body.removeClass("show-file-path"));
 	}
 
 	initState() {
@@ -172,8 +202,18 @@ export default class FloatSearchPlugin extends Plugin {
 		this.cmdkModal.open();
 	}
 
+	/** Show or hide the file path of results in every window, popouts included. */
 	updateFilePathVisibility() {
-		document.body.toggleClass("show-file-path", this.settings.showFilePath);
+		this.forEachWindowDocument((doc) => this.applyFilePathVisibility(doc));
+	}
+
+	private applyFilePathVisibility(doc: Document) {
+		doc.body.toggleClass("show-file-path", this.settings.showFilePath);
+	}
+
+	/** Run `cb` for the document of the main window and of each popout window. */
+	private forEachWindowDocument(cb: (doc: Document) => void) {
+		for (const win of EmbeddedView.activeWindows(this)) cb(win.document);
 	}
 
 	setFilePathVisibility(show: boolean) {
@@ -233,10 +273,10 @@ export default class FloatSearchPlugin extends Plugin {
 	patchWorkspace() {
 		let layoutChanging = false;
 		const workspace = this.app.workspace;
-		const uninstaller = around(Workspace.prototype, {
+		const uninstaller = around(Workspace.prototype as unknown as WorkspacePatchTarget, {
 			getLeaf: (next) =>
 				function (this: Workspace, ...args: Parameters<Workspace["getLeaf"]>) {
-					const activeLeaf = this.activeLeaf;
+					const activeLeaf = getActiveLeaf(this);
 					if (activeLeaf) {
 						const fsCtnEl = (
 							activeLeaf.parent as unknown as { containerEl: HTMLElement }
@@ -541,7 +581,7 @@ export default class FloatSearchPlugin extends Plugin {
 			if (searchView?.getViewType() !== "search" || !searchView.dom) return false;
 
 			this.register(
-				around(searchView.constructor.prototype as Record<string, AnyFn>, {
+				around(searchView.constructor.prototype as SearchViewPatchTarget, {
 					onOpen(old) {
 						return function (this: SearchView) {
 							const result = old.call(this);
@@ -586,7 +626,7 @@ export default class FloatSearchPlugin extends Plugin {
 						};
 					},
 					setState(old) {
-						return function (this: SearchView, state: searchState, result: unknown) {
+						return function (this: SearchView, state: searchState, result: ViewStateResult) {
 							if (interceptQuery(this.leaf, state)) return Promise.resolve();
 							return old.call(this, state, result);
 						};
@@ -619,8 +659,8 @@ export default class FloatSearchPlugin extends Plugin {
 	/** Show the folder of each file result (the "Show file path" option). */
 	private patchSearchResultDom(searchView: SearchView) {
 		this.register(
-			around(searchView.dom.constructor.prototype, {
-				stopLoader(old: () => void) {
+			around(searchView.dom.constructor.prototype as { stopLoader(): void }, {
+				stopLoader(old) {
 					return function (this: { vChildren?: { children?: ResultFileItem[] } }) {
 						old.call(this);
 						this.vChildren?.children?.forEach((child) => {
@@ -648,7 +688,7 @@ export default class FloatSearchPlugin extends Plugin {
 		const closeModal = () => this.modal?.close();
 
 		this.register(
-			around(manager.constructor.prototype as Record<string, (...args: unknown[]) => unknown>, {
+			around(manager.constructor.prototype as { dragFile(...args: unknown[]): unknown }, {
 				dragFile(old) {
 					return function (this: unknown, ...args: unknown[]) {
 						const result = old.call(this, ...args);
@@ -685,9 +725,9 @@ export default class FloatSearchPlugin extends Plugin {
 		id: string;
 		name: string;
 		queryBuilder: (file?: TFile) => string;
-		global: boolean;
+		isGlobal: boolean;
 	}): void {
-		if (options.global) {
+		if (options.isGlobal) {
 			this.addCommand({
 				id: options.id,
 				name: options.name,
@@ -751,14 +791,14 @@ export default class FloatSearchPlugin extends Plugin {
 				const name = file.extension === "canvas" ? file.name : file.basename;
 				return " /\\[\\[" + name + "(\\|[^\\]]*)?\\]\\]/";
 			},
-			global: false,
+			isGlobal: false,
 		});
 
 		this.createCommand({
 			id: "search-in-current-file",
 			name: "Search in current file",
 			queryBuilder: (file?: TFile) => (file ? ` path:"${file.path}"` : ""),
-			global: false,
+			isGlobal: false,
 		});
 
 		this.registerSearchOperatorCommands();
@@ -807,7 +847,7 @@ export default class FloatSearchPlugin extends Plugin {
 			["search-property", "Search: [property] or [property:value]", "[]"],
 		];
 		for (const [id, name, query] of searchOperators) {
-			this.createCommand({ id, name, queryBuilder: () => query, global: true });
+			this.createCommand({ id, name, queryBuilder: () => query, isGlobal: true });
 		}
 	}
 
