@@ -7,6 +7,7 @@
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"lint": "eslint .",
+		"test": "vitest run",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
@@ -19,7 +20,8 @@
 		"obsidian": "1.14.4",
 		"tslib": "2.4.0",
 		"typescript": "5.9.3",
-		"typescript-eslint": "8.73.0"
+		"typescript-eslint": "8.73.0",
+		"vitest": "^5.1.1"
 	},
 	"dependencies": {
 		"monkey-around": "^2.3.0"

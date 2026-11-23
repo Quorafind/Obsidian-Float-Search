@@ -30,3 +30,17 @@ jobs:
                     scanner-lint: true
                     # Fail on any finding instead of only reporting it.
                     strict: true
+
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v7
+            -   uses: pnpm/action-setup@v6
+                with:
+                    version: 9
+            -   uses: actions/setup-node@v7
+                with:
+                    node-version: 24
+                    cache: pnpm
+            -   run: pnpm install --frozen-lockfile
+            -   run: pnpm test
