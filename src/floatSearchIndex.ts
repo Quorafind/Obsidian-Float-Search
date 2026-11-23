@@ -29,6 +29,7 @@ import { FloatSearchCmdkModal } from "./floatSearchCmdk";
 import { FloatSearchSettingTab } from "./settingTab";
 import { registerIcons } from "./icons";
 import { DoubleTapDetector } from "./doubleTap";
+import { buildBacklinkQuery } from "./backlinkQuery";
 import { attachNativeSearchPreview } from "./nativeSearchPreview";
 import {
 	getWorkspaceSearchLeaves,
@@ -789,7 +790,7 @@ export default class FloatSearchPlugin extends Plugin {
 			queryBuilder: (file?: TFile) => {
 				if (!file) return "";
 				const name = file.extension === "canvas" ? file.name : file.basename;
-				return " /\\[\\[" + name + "(\\|[^\\]]*)?\\]\\]/";
+				return buildBacklinkQuery(name);
 			},
 			isGlobal: false,
 		});
